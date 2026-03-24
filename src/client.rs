@@ -20,7 +20,11 @@ use crate::models::sighting::MispSighting;
 use crate::models::tag::MispTag;
 use crate::models::taxonomy::MispTaxonomy;
 use crate::models::user::{MispInbox, MispRole, MispUser};
+use crate::models::user_setting::MispUserSetting;
 use crate::models::warninglist::MispWarninglist;
+use crate::models::feed::MispFeed;
+use crate::models::server::MispServer;
+use crate::models::sharing_group::MispSharingGroup;
 
 /// Async client for the MISP REST API.
 ///
@@ -1829,6 +1833,475 @@ impl MispClient {
     pub async fn delete_role(&self, id: i64) -> MispResult<Value> {
         self.post(&format!("admin/roles/delete/{id}"), &serde_json::json!({}))
             .await
+    }
+
+    // ── Servers ───────────────────────────────────────────────────────
+
+    /// List all sync servers.
+    pub async fn servers(&self) -> MispResult<Vec<MispServer>> {
+        let json = self.get("servers/index").await?;
+        let arr = json
+            .as_array()
+            .ok_or_else(|| MispError::UnexpectedResponse("expected array".into()))?;
+        let mut servers = Vec::with_capacity(arr.len());
+        for item in arr {
+            let val = if item.get("Server").is_some() {
+                &item["Server"]
+            } else {
+                item
+            };
+            let s: MispServer = serde_json::from_value(val.clone())?;
+            servers.push(s);
+        }
+        Ok(servers)
+    }
+
+    /// Get the sync configuration for import on another instance.
+    pub async fn get_sync_config(&self) -> MispResult<Value> {
+        self.get("servers/createSync").await
+    }
+
+    /// Import a server sync configuration.
+    pub async fn import_server(&self, server: &Value) -> MispResult<Value> {
+        self.post("servers/import", server).await
+    }
+
+    /// Add a new sync server.
+    pub async fn add_server(&self, server: &MispServer) -> MispResult<MispServer> {
+        let body = serde_json::json!({"Server": server});
+        let json = self.post("servers/add", &body).await?;
+        let val = if json.get("Server").is_some() {
+            &json["Server"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Update an existing sync server.
+    pub async fn update_server(&self, server: &MispServer) -> MispResult<MispServer> {
+        let id = server
+            .id
+            .ok_or_else(|| MispError::MissingField("id".into()))?;
+        let body = serde_json::json!({"Server": server});
+        let json = self.post(&format!("servers/edit/{id}"), &body).await?;
+        let val = if json.get("Server").is_some() {
+            &json["Server"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Delete a sync server by ID.
+    pub async fn delete_server(&self, id: i64) -> MispResult<Value> {
+        self.post(&format!("servers/delete/{id}"), &serde_json::json!({}))
+            .await
+    }
+
+    /// Trigger a pull from a sync server. Optionally pull a single event.
+    pub async fn server_pull(&self, id: i64, event_id: Option<i64>) -> MispResult<Value> {
+        let path = match event_id {
+            Some(eid) => format!("servers/pull/{id}/{eid}"),
+            None => format!("servers/pull/{id}"),
+        };
+        self.get(&path).await
+    }
+
+    /// Trigger a push to a sync server. Optionally push a single event.
+    pub async fn server_push(&self, id: i64, event_id: Option<i64>) -> MispResult<Value> {
+        let path = match event_id {
+            Some(eid) => format!("servers/push/{id}/{eid}"),
+            None => format!("servers/push/{id}"),
+        };
+        self.get(&path).await
+    }
+
+    /// Test connection to a sync server.
+    pub async fn test_server(&self, id: i64) -> MispResult<Value> {
+        self.post(
+            &format!("servers/testConnection/{id}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Trigger a MISP update (pull latest from upstream source).
+    pub async fn update_misp(&self) -> MispResult<Value> {
+        self.post("servers/update", &serde_json::json!({})).await
+    }
+
+    /// Restart all background workers.
+    pub async fn restart_workers(&self) -> MispResult<Value> {
+        self.post("servers/restartWorkers", &serde_json::json!({}))
+            .await
+    }
+
+    /// Restart only dead/stalled background workers.
+    pub async fn restart_dead_workers(&self) -> MispResult<Value> {
+        self.post("servers/restartDeadWorkers", &serde_json::json!({}))
+            .await
+    }
+
+    /// Get information about all background workers.
+    pub async fn get_workers(&self) -> MispResult<Value> {
+        self.get("servers/getWorkers").await
+    }
+
+    /// Start a specific worker type (e.g. "default", "email", "cache").
+    pub async fn start_worker(&self, worker_type: &str) -> MispResult<Value> {
+        self.post(
+            &format!("servers/startWorker/{worker_type}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Stop a specific worker by PID.
+    pub async fn stop_worker_by_pid(&self, pid: i64) -> MispResult<Value> {
+        self.post(
+            &format!("servers/stopWorker/{pid}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Kill all background workers.
+    pub async fn kill_all_workers(&self) -> MispResult<Value> {
+        self.post("servers/killAllWorkers", &serde_json::json!({}))
+            .await
+    }
+
+    // ── Feeds ─────────────────────────────────────────────────────────
+
+    /// List all feeds.
+    pub async fn feeds(&self) -> MispResult<Vec<MispFeed>> {
+        let json = self.get("feeds/index").await?;
+        let arr = json
+            .as_array()
+            .ok_or_else(|| MispError::UnexpectedResponse("expected array".into()))?;
+        let mut feeds = Vec::with_capacity(arr.len());
+        for item in arr {
+            let val = if item.get("Feed").is_some() {
+                &item["Feed"]
+            } else {
+                item
+            };
+            let f: MispFeed = serde_json::from_value(val.clone())?;
+            feeds.push(f);
+        }
+        Ok(feeds)
+    }
+
+    /// Get a single feed by ID.
+    pub async fn get_feed(&self, id: i64) -> MispResult<MispFeed> {
+        let json = self.get(&format!("feeds/view/{id}")).await?;
+        let val = if json.get("Feed").is_some() {
+            &json["Feed"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Add a new feed.
+    pub async fn add_feed(&self, feed: &MispFeed) -> MispResult<MispFeed> {
+        let body = serde_json::json!({"Feed": feed});
+        let json = self.post("feeds/add", &body).await?;
+        let val = if json.get("Feed").is_some() {
+            &json["Feed"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Update an existing feed.
+    pub async fn update_feed(&self, feed: &MispFeed) -> MispResult<MispFeed> {
+        let id = feed
+            .id
+            .ok_or_else(|| MispError::MissingField("id".into()))?;
+        let body = serde_json::json!({"Feed": feed});
+        let json = self.post(&format!("feeds/edit/{id}"), &body).await?;
+        let val = if json.get("Feed").is_some() {
+            &json["Feed"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Delete a feed by ID.
+    pub async fn delete_feed(&self, id: i64) -> MispResult<Value> {
+        self.post(&format!("feeds/delete/{id}"), &serde_json::json!({}))
+            .await
+    }
+
+    /// Enable a feed.
+    pub async fn enable_feed(&self, id: i64) -> MispResult<Value> {
+        self.post(&format!("feeds/enable/{id}"), &serde_json::json!({}))
+            .await
+    }
+
+    /// Disable a feed.
+    pub async fn disable_feed(&self, id: i64) -> MispResult<Value> {
+        self.post(&format!("feeds/disable/{id}"), &serde_json::json!({}))
+            .await
+    }
+
+    /// Enable caching for a feed.
+    pub async fn enable_feed_cache(&self, id: i64) -> MispResult<Value> {
+        self.post(
+            &format!("feeds/cacheIndex/enable:{id}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Disable caching for a feed.
+    pub async fn disable_feed_cache(&self, id: i64) -> MispResult<Value> {
+        self.post(
+            &format!("feeds/cacheIndex/disable:{id}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Fetch data from a specific feed.
+    pub async fn fetch_feed(&self, id: i64) -> MispResult<Value> {
+        self.get(&format!("feeds/fetchFromFeed/{id}")).await
+    }
+
+    /// Cache all feeds.
+    pub async fn cache_all_feeds(&self) -> MispResult<Value> {
+        self.get("feeds/cacheFeeds/all").await
+    }
+
+    /// Cache a specific feed by ID.
+    pub async fn cache_feed(&self, id: i64) -> MispResult<Value> {
+        self.get(&format!("feeds/cacheFeeds/{id}")).await
+    }
+
+    /// Cache all freetext feeds.
+    pub async fn cache_freetext_feeds(&self) -> MispResult<Value> {
+        self.get("feeds/cacheFeeds/freetext").await
+    }
+
+    /// Cache all MISP-format feeds.
+    pub async fn cache_misp_feeds(&self) -> MispResult<Value> {
+        self.get("feeds/cacheFeeds/misp").await
+    }
+
+    /// Compare feeds to identify overlapping indicators.
+    pub async fn compare_feeds(&self) -> MispResult<Value> {
+        self.get("feeds/compareFeeds").await
+    }
+
+    /// Load the default set of feeds.
+    pub async fn load_default_feeds(&self) -> MispResult<Value> {
+        self.post("feeds/loadDefaultFeeds", &serde_json::json!({}))
+            .await
+    }
+
+    // ── Sharing Groups ────────────────────────────────────────────────
+
+    /// List all sharing groups.
+    pub async fn sharing_groups(&self) -> MispResult<Vec<MispSharingGroup>> {
+        let json = self.get("sharingGroups/index").await?;
+        let arr = json
+            .as_array()
+            .ok_or_else(|| MispError::UnexpectedResponse("expected array".into()))?;
+        let mut groups = Vec::with_capacity(arr.len());
+        for item in arr {
+            let val = if item.get("SharingGroup").is_some() {
+                &item["SharingGroup"]
+            } else {
+                item
+            };
+            let sg: MispSharingGroup = serde_json::from_value(val.clone())?;
+            groups.push(sg);
+        }
+        Ok(groups)
+    }
+
+    /// Get a single sharing group by ID.
+    pub async fn get_sharing_group(&self, id: i64) -> MispResult<MispSharingGroup> {
+        let json = self.get(&format!("sharingGroups/view/{id}")).await?;
+        let val = if json.get("SharingGroup").is_some() {
+            &json["SharingGroup"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Add a new sharing group.
+    pub async fn add_sharing_group(
+        &self,
+        sg: &MispSharingGroup,
+    ) -> MispResult<MispSharingGroup> {
+        let body = serde_json::json!({"SharingGroup": sg});
+        let json = self.post("sharingGroups/add", &body).await?;
+        let val = if json.get("SharingGroup").is_some() {
+            &json["SharingGroup"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Update an existing sharing group.
+    pub async fn update_sharing_group(
+        &self,
+        sg: &MispSharingGroup,
+    ) -> MispResult<MispSharingGroup> {
+        let id = sg
+            .id
+            .ok_or_else(|| MispError::MissingField("id".into()))?;
+        let body = serde_json::json!({"SharingGroup": sg});
+        let json = self
+            .post(&format!("sharingGroups/edit/{id}"), &body)
+            .await?;
+        let val = if json.get("SharingGroup").is_some() {
+            &json["SharingGroup"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Check if a sharing group exists by ID.
+    pub async fn sharing_group_exists(&self, id: i64) -> MispResult<bool> {
+        self.head(&format!("sharingGroups/view/{id}")).await
+    }
+
+    /// Delete a sharing group by ID.
+    pub async fn delete_sharing_group(&self, id: i64) -> MispResult<Value> {
+        self.post(
+            &format!("sharingGroups/delete/{id}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Add an organisation to a sharing group.
+    pub async fn add_org_to_sharing_group(
+        &self,
+        sg_id: i64,
+        org_id: i64,
+    ) -> MispResult<Value> {
+        self.post(
+            &format!("sharingGroups/addOrg/{sg_id}/{org_id}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Remove an organisation from a sharing group.
+    pub async fn remove_org_from_sharing_group(
+        &self,
+        sg_id: i64,
+        org_id: i64,
+    ) -> MispResult<Value> {
+        self.post(
+            &format!("sharingGroups/removeOrg/{sg_id}/{org_id}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Add a server to a sharing group.
+    pub async fn add_server_to_sharing_group(
+        &self,
+        sg_id: i64,
+        server_id: i64,
+    ) -> MispResult<Value> {
+        self.post(
+            &format!("sharingGroups/addServer/{sg_id}/{server_id}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Remove a server from a sharing group.
+    pub async fn remove_server_from_sharing_group(
+        &self,
+        sg_id: i64,
+        server_id: i64,
+    ) -> MispResult<Value> {
+        self.post(
+            &format!("sharingGroups/removeServer/{sg_id}/{server_id}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    // ── User Settings ─────────────────────────────────────────────────
+
+    /// List all user settings (optionally for a specific user).
+    pub async fn user_settings(&self) -> MispResult<Vec<MispUserSetting>> {
+        let json = self.get("userSettings/index").await?;
+        let arr = json
+            .as_array()
+            .ok_or_else(|| MispError::UnexpectedResponse("expected array".into()))?;
+        let mut settings = Vec::with_capacity(arr.len());
+        for item in arr {
+            let val = if item.get("UserSetting").is_some() {
+                &item["UserSetting"]
+            } else {
+                item
+            };
+            let s: MispUserSetting = serde_json::from_value(val.clone())?;
+            settings.push(s);
+        }
+        Ok(settings)
+    }
+
+    /// Get a specific user setting by key. Optionally scope to a user ID.
+    pub async fn get_user_setting(
+        &self,
+        setting: &str,
+        user_id: Option<i64>,
+    ) -> MispResult<MispUserSetting> {
+        let path = match user_id {
+            Some(uid) => format!("userSettings/view/{setting}/{uid}"),
+            None => format!("userSettings/view/{setting}"),
+        };
+        let json = self.get(&path).await?;
+        let val = if json.get("UserSetting").is_some() {
+            &json["UserSetting"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Set a user setting. If `user_id` is None, applies to the current user.
+    pub async fn set_user_setting(
+        &self,
+        setting: &str,
+        value: &Value,
+        user_id: Option<i64>,
+    ) -> MispResult<Value> {
+        let path = match user_id {
+            Some(uid) => format!("userSettings/setSetting/{uid}/{setting}"),
+            None => format!("userSettings/setSetting/{setting}"),
+        };
+        let body = serde_json::json!({"value": value});
+        self.post(&path, &body).await
+    }
+
+    /// Delete a user setting.
+    pub async fn delete_user_setting(
+        &self,
+        setting: &str,
+        user_id: Option<i64>,
+    ) -> MispResult<Value> {
+        let path = match user_id {
+            Some(uid) => format!("userSettings/delete/{setting}/{uid}"),
+            None => format!("userSettings/delete/{setting}"),
+        };
+        self.post(&path, &serde_json::json!({})).await
     }
 }
 
@@ -4792,5 +5265,320 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(err, MispError::ApiError { status: 400, .. }));
+    }
+
+    // ── Server CRUD tests ─────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn servers_list() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/servers/index"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {"Server": {"id": "1", "url": "https://misp.partner.org", "name": "Partner", "push": "1", "pull": "1"}},
+                {"Server": {"id": "2", "url": "https://misp.other.org", "name": "Other", "push": "0", "pull": "1"}}
+            ])))
+            .mount(&server)
+            .await;
+
+        let servers = client.servers().await.unwrap();
+        assert_eq!(servers.len(), 2);
+        assert_eq!(servers[0].name, "Partner");
+        assert!(servers[0].push);
+        assert!(!servers[1].push);
+    }
+
+    #[tokio::test]
+    async fn add_server_sends_body() {
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/servers/add"))
+            .and(body_partial_json(
+                serde_json::json!({"Server": {"url": "https://remote.misp", "name": "Remote"}}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "Server": {"id": "5", "url": "https://remote.misp", "name": "Remote", "push": false, "pull": false}
+            })))
+            .mount(&server)
+            .await;
+
+        let s = super::MispServer::new("https://remote.misp", "Remote");
+        let result = client.add_server(&s).await.unwrap();
+        assert_eq!(result.id, Some(5));
+        assert_eq!(result.name, "Remote");
+    }
+
+    #[tokio::test]
+    async fn test_server_connection() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/servers/testConnection/1"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"status": 1, "message": "OK"})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client.test_server(1).await.unwrap();
+        assert_eq!(result["status"], 1);
+    }
+
+    // ── Feed CRUD tests ───────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn feeds_list() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/feeds/index"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {"Feed": {"id": "1", "name": "CIRCL OSINT", "url": "https://circl.lu/feed", "enabled": "1"}},
+                {"Feed": {"id": "2", "name": "Botvrij", "url": "https://botvrij.eu/feed", "enabled": "0"}}
+            ])))
+            .mount(&server)
+            .await;
+
+        let feeds = client.feeds().await.unwrap();
+        assert_eq!(feeds.len(), 2);
+        assert_eq!(feeds[0].name, "CIRCL OSINT");
+        assert!(feeds[0].enabled);
+        assert!(!feeds[1].enabled);
+    }
+
+    #[tokio::test]
+    async fn add_feed_sends_body() {
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/feeds/add"))
+            .and(body_partial_json(
+                serde_json::json!({"Feed": {"name": "Test Feed", "url": "https://example.com"}}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "Feed": {"id": "10", "name": "Test Feed", "url": "https://example.com", "enabled": false}
+            })))
+            .mount(&server)
+            .await;
+
+        let f = super::MispFeed::new("Test Feed", "https://example.com");
+        let result = client.add_feed(&f).await.unwrap();
+        assert_eq!(result.id, Some(10));
+    }
+
+    #[tokio::test]
+    async fn enable_disable_feed() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/feeds/enable/1"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Feed enabled."})),
+            )
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/feeds/disable/1"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Feed disabled."})),
+            )
+            .mount(&server)
+            .await;
+
+        let r = client.enable_feed(1).await.unwrap();
+        assert_eq!(r["message"], "Feed enabled.");
+
+        let r = client.disable_feed(1).await.unwrap();
+        assert_eq!(r["message"], "Feed disabled.");
+    }
+
+    // ── Sharing Group CRUD tests ──────────────────────────────────────
+
+    #[tokio::test]
+    async fn sharing_groups_list() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/sharingGroups/index"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {"SharingGroup": {"id": "1", "name": "CIRCL Partners", "active": "1", "roaming": "0"}},
+                {"SharingGroup": {"id": "2", "name": "NATO TLP:RED", "active": "1", "roaming": "1"}}
+            ])))
+            .mount(&server)
+            .await;
+
+        let groups = client.sharing_groups().await.unwrap();
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].name, "CIRCL Partners");
+        assert!(groups[0].active);
+        assert!(!groups[0].roaming);
+        assert!(groups[1].roaming);
+    }
+
+    #[tokio::test]
+    async fn add_sharing_group_sends_body() {
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/sharingGroups/add"))
+            .and(body_partial_json(
+                serde_json::json!({"SharingGroup": {"name": "New SG"}}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "SharingGroup": {"id": "5", "name": "New SG", "active": true}
+            })))
+            .mount(&server)
+            .await;
+
+        let sg = super::MispSharingGroup::new("New SG");
+        let result = client.add_sharing_group(&sg).await.unwrap();
+        assert_eq!(result.id, Some(5));
+        assert_eq!(result.name, "New SG");
+    }
+
+    #[tokio::test]
+    async fn sharing_group_exists_check() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("HEAD"))
+            .and(path("/sharingGroups/view/1"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+
+        assert!(client.sharing_group_exists(1).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn add_org_to_sharing_group_sends_request() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/sharingGroups/addOrg/1/5"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Organisation added."})),
+            )
+            .mount(&server)
+            .await;
+
+        let r = client.add_org_to_sharing_group(1, 5).await.unwrap();
+        assert_eq!(r["message"], "Organisation added.");
+    }
+
+    // ── User Setting CRUD tests ───────────────────────────────────────
+
+    #[tokio::test]
+    async fn user_settings_list() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/userSettings/index"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {"UserSetting": {"id": "1", "setting": "dashboard", "user_id": "1"}},
+                {"UserSetting": {"id": "2", "setting": "homepage", "user_id": "1"}}
+            ])))
+            .mount(&server)
+            .await;
+
+        let settings = client.user_settings().await.unwrap();
+        assert_eq!(settings.len(), 2);
+        assert_eq!(settings[0].setting, "dashboard");
+    }
+
+    #[tokio::test]
+    async fn set_user_setting_sends_body() {
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/userSettings/setSetting/dashboard"))
+            .and(body_partial_json(
+                serde_json::json!({"value": {"widgets": ["timeline"]}}),
+            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Setting saved."})),
+            )
+            .mount(&server)
+            .await;
+
+        let val = serde_json::json!({"widgets": ["timeline"]});
+        let r = client.set_user_setting("dashboard", &val, None).await.unwrap();
+        assert_eq!(r["message"], "Setting saved.");
+    }
+
+    #[tokio::test]
+    async fn delete_user_setting_sends_request() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/userSettings/delete/dashboard"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Setting deleted."})),
+            )
+            .mount(&server)
+            .await;
+
+        let r = client.delete_user_setting("dashboard", None).await.unwrap();
+        assert_eq!(r["message"], "Setting deleted.");
     }
 }

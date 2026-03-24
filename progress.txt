@@ -248,57 +248,57 @@ PHASE 4: ADMINISTRATION
 [x] Unit tests: user/org/role serde round-trips
 
 --- Iteration 9: Servers, Feeds, Sharing Groups, User Settings ---
-[ ] Implement MispServer struct (serde)
-[ ] Implement servers() - GET /servers/index
-[ ] Implement get_sync_config() - GET /servers/createSync
-[ ] Implement import_server(server) - POST /servers/import
-[ ] Implement add_server(server) - POST /servers/add
-[ ] Implement update_server(server) - POST /servers/edit/{id}
-[ ] Implement delete_server(id) - POST /servers/delete/{id}
-[ ] Implement server_pull(id, event) - GET /servers/pull/{id}/{event_id}
-[ ] Implement server_push(id, event) - GET /servers/push/{id}/{event_id}
-[ ] Implement test_server(id) - POST /servers/testConnection/{id}
-[ ] Implement update_misp() - POST /servers/update
-[ ] Implement restart_workers() - POST /servers/restartWorkers
-[ ] Implement restart_dead_workers() - POST /servers/restartDeadWorkers
-[ ] Implement get_workers() - GET /servers/getWorkers
-[ ] Implement start_worker(type) - POST /servers/startWorker/{type}
-[ ] Implement stop_worker_by_pid(pid) - POST /servers/stopWorker/{pid}
-[ ] Implement kill_all_workers() - POST /servers/killAllWorkers
-[ ] Implement MispFeed struct (serde)
-[ ] Implement feeds() - GET /feeds/index
-[ ] Implement get_feed(id) - GET /feeds/view/{id}
-[ ] Implement add_feed(feed) - POST /feeds/add
-[ ] Implement update_feed(feed) - POST /feeds/edit/{id}
-[ ] Implement delete_feed(id) - POST /feeds/delete/{id}
-[ ] Implement enable_feed(id) - POST /feeds/enable/{id}
-[ ] Implement disable_feed(id) - POST /feeds/disable/{id}
-[ ] Implement enable_feed_cache(id) - POST /feeds/cacheIndex/enable:{id}
-[ ] Implement disable_feed_cache(id) - POST /feeds/cacheIndex/disable:{id}
-[ ] Implement fetch_feed(id) - GET /feeds/fetchFromFeed/{id}
-[ ] Implement cache_all_feeds() - GET /feeds/cacheFeeds/all
-[ ] Implement cache_feed(id) - GET /feeds/cacheFeeds/{id}
-[ ] Implement cache_freetext_feeds() - GET /feeds/cacheFeeds/freetext
-[ ] Implement cache_misp_feeds() - GET /feeds/cacheFeeds/misp
-[ ] Implement compare_feeds() - GET /feeds/compareFeeds
-[ ] Implement load_default_feeds() - POST /feeds/loadDefaultFeeds
-[ ] Implement MispSharingGroup struct (serde)
-[ ] Implement sharing_groups() - GET /sharingGroups/index
-[ ] Implement get_sharing_group(id) - GET /sharingGroups/view/{id}
-[ ] Implement add_sharing_group(sg) - POST /sharingGroups/add
-[ ] Implement update_sharing_group(sg) - POST /sharingGroups/edit/{id}
-[ ] Implement sharing_group_exists(id) - HEAD /sharingGroups/view/{id}
-[ ] Implement delete_sharing_group(id) - POST /sharingGroups/delete/{id}
-[ ] Implement add_org_to_sharing_group(sg, org) - POST /sharingGroups/addOrg/{sg_id}/{org_id}
-[ ] Implement remove_org_from_sharing_group(sg, org) - POST /sharingGroups/removeOrg/{sg_id}/{org_id}
-[ ] Implement add_server_to_sharing_group(sg, server) - POST /sharingGroups/addServer/{sg_id}/{server_id}
-[ ] Implement remove_server_from_sharing_group(sg, server) - POST /sharingGroups/removeServer/{sg_id}/{server_id}
-[ ] Implement MispUserSetting struct (serde)
-[ ] Implement user_settings() - GET /userSettings/index
-[ ] Implement get_user_setting(setting, user) - GET /userSettings/view/{setting}
-[ ] Implement set_user_setting(setting, value, user) - POST /userSettings/setSetting/{user_id}/{setting}
-[ ] Implement delete_user_setting(setting, user) - POST /userSettings/delete/{setting}
-[ ] Unit tests: server/feed/sharing_group serde round-trips
+[x] Implement MispServer struct (serde)
+[x] Implement servers() - GET /servers/index
+[x] Implement get_sync_config() - GET /servers/createSync
+[x] Implement import_server(server) - POST /servers/import
+[x] Implement add_server(server) - POST /servers/add
+[x] Implement update_server(server) - POST /servers/edit/{id}
+[x] Implement delete_server(id) - POST /servers/delete/{id}
+[x] Implement server_pull(id, event) - GET /servers/pull/{id}/{event_id}
+[x] Implement server_push(id, event) - GET /servers/push/{id}/{event_id}
+[x] Implement test_server(id) - POST /servers/testConnection/{id}
+[x] Implement update_misp() - POST /servers/update
+[x] Implement restart_workers() - POST /servers/restartWorkers
+[x] Implement restart_dead_workers() - POST /servers/restartDeadWorkers
+[x] Implement get_workers() - GET /servers/getWorkers
+[x] Implement start_worker(type) - POST /servers/startWorker/{type}
+[x] Implement stop_worker_by_pid(pid) - POST /servers/stopWorker/{pid}
+[x] Implement kill_all_workers() - POST /servers/killAllWorkers
+[x] Implement MispFeed struct (serde)
+[x] Implement feeds() - GET /feeds/index
+[x] Implement get_feed(id) - GET /feeds/view/{id}
+[x] Implement add_feed(feed) - POST /feeds/add
+[x] Implement update_feed(feed) - POST /feeds/edit/{id}
+[x] Implement delete_feed(id) - POST /feeds/delete/{id}
+[x] Implement enable_feed(id) - POST /feeds/enable/{id}
+[x] Implement disable_feed(id) - POST /feeds/disable/{id}
+[x] Implement enable_feed_cache(id) - POST /feeds/cacheIndex/enable:{id}
+[x] Implement disable_feed_cache(id) - POST /feeds/cacheIndex/disable:{id}
+[x] Implement fetch_feed(id) - GET /feeds/fetchFromFeed/{id}
+[x] Implement cache_all_feeds() - GET /feeds/cacheFeeds/all
+[x] Implement cache_feed(id) - GET /feeds/cacheFeeds/{id}
+[x] Implement cache_freetext_feeds() - GET /feeds/cacheFeeds/freetext
+[x] Implement cache_misp_feeds() - GET /feeds/cacheFeeds/misp
+[x] Implement compare_feeds() - GET /feeds/compareFeeds
+[x] Implement load_default_feeds() - POST /feeds/loadDefaultFeeds
+[x] Implement MispSharingGroup struct (serde)
+[x] Implement sharing_groups() - GET /sharingGroups/index
+[x] Implement get_sharing_group(id) - GET /sharingGroups/view/{id}
+[x] Implement add_sharing_group(sg) - POST /sharingGroups/add
+[x] Implement update_sharing_group(sg) - POST /sharingGroups/edit/{id}
+[x] Implement sharing_group_exists(id) - HEAD /sharingGroups/view/{id}
+[x] Implement delete_sharing_group(id) - POST /sharingGroups/delete/{id}
+[x] Implement add_org_to_sharing_group(sg, org) - POST /sharingGroups/addOrg/{sg_id}/{org_id}
+[x] Implement remove_org_from_sharing_group(sg, org) - POST /sharingGroups/removeOrg/{sg_id}/{org_id}
+[x] Implement add_server_to_sharing_group(sg, server) - POST /sharingGroups/addServer/{sg_id}/{server_id}
+[x] Implement remove_server_from_sharing_group(sg, server) - POST /sharingGroups/removeServer/{sg_id}/{server_id}
+[x] Implement MispUserSetting struct (serde)
+[x] Implement user_settings() - GET /userSettings/index
+[x] Implement get_user_setting(setting, user) - GET /userSettings/view/{setting}
+[x] Implement set_user_setting(setting, value, user) - POST /userSettings/setSetting/{user_id}/{setting}
+[x] Implement delete_user_setting(setting, user) - POST /userSettings/delete/{setting}
+[x] Unit tests: server/feed/sharing_group serde round-trips
 
 ================================================================================
 PHASE 5: SEARCH & ADVANCED
