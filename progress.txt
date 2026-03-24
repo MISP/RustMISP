@@ -49,23 +49,23 @@ PHASE 1: FOUNDATION
 [x] Verify: cargo test succeeds
 
 --- Iteration 2: HTTP Client & Authentication ---
-[ ] Implement MispClient struct (url, key, ssl, client)
-[ ] Implement MispClientBuilder (proxy, timeout, headers, cert, CA)
-[ ] Implement _prepare_request (GET, POST, DELETE with auth header)
-[ ] Implement _check_response (JSON parsing, error extraction)
-[ ] Implement _check_head_response (HEAD for exists checks)
-[ ] Implement describe_types_local() - load bundled JSON
-[ ] Implement describe_types_remote() - GET /attributes/describeTypes.json
-[ ] Implement misp_instance_version() - GET /servers/getVersion
-[ ] Implement version() - GET /servers/getPyMISPVersion.json
-[ ] Implement server_settings() - GET /servers/serverSettings
-[ ] Implement get_server_setting(setting) - GET /servers/getSetting/{setting}
-[ ] Implement set_server_setting(setting, value) - POST /servers/serverSettingsEdit
-[ ] Implement remote_acl(debug_type) - GET /servers/queryACL/{debug_type}
-[ ] Implement db_schema_diagnostic() - GET /servers/schemaDiagnostics
-[ ] Unit tests: client construction with various configs
-[ ] Unit tests: request preparation (headers, auth)
-[ ] Integration test stub: version check against live MISP
+[x] Implement MispClient struct (url, key, ssl, client)
+[x] Implement MispClientBuilder (proxy, timeout, headers, cert, CA)
+[x] Implement _prepare_request (GET, POST, DELETE with auth header)
+[x] Implement _check_response (JSON parsing, error extraction)
+[x] Implement _check_head_response (HEAD for exists checks)
+[x] Implement describe_types_local() - load bundled JSON
+[x] Implement describe_types_remote() - GET /attributes/describeTypes.json
+[x] Implement misp_instance_version() - GET /servers/getVersion
+[x] Implement version() - GET /servers/getPyMISPVersion.json
+[x] Implement server_settings() - GET /servers/serverSettings
+[x] Implement get_server_setting(setting) - GET /servers/getSetting/{setting}
+[x] Implement set_server_setting(setting, value) - POST /servers/serverSettingsEdit
+[x] Implement remote_acl(debug_type) - GET /servers/queryACL/{debug_type}
+[x] Implement db_schema_diagnostic() - GET /servers/schemaDiagnostics
+[x] Unit tests: client construction with various configs
+[x] Unit tests: request preparation (headers, auth)
+[x] Integration test stub: version check against live MISP
 
 --- Iteration 3: Event & Attribute & Tag Models + CRUD ---
 [ ] Implement MispTag struct (serde)

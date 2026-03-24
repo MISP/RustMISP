@@ -20,7 +20,7 @@ serde_json = "1"
 # Async HTTP
 reqwest = { version = "0.12", features = [
     "json",
-    "rustls-tls",
+    "native-tls",
 ], default-features = false }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
