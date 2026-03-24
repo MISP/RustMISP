@@ -367,7 +367,7 @@ PHASE 6: TOOLS & POLISH
 [x] Unit tests: validation against describeTypes.json
 
 --- Iteration 13: Blocking Client & Python Tests ---
-[ ] Implement MispClientBlocking wrapper (wraps async with tokio::runtime::Runtime)
+[x] Implement MispClientBlocking wrapper (wraps async with tokio::runtime::Runtime)
 [ ] Copy Python test suite from PyMISP repo (github.com/MISP/PyMISP tests/) into tests/python/
 [ ]   - test_mispevent.py
 [ ]   - test_analyst_data.py

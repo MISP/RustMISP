@@ -1,4 +1,6 @@
 pub mod client;
+#[cfg(feature = "blocking")]
+pub mod client_blocking;
 pub mod error;
 pub mod models;
 pub mod search;
@@ -6,6 +8,8 @@ pub mod tools;
 pub mod validation;
 
 pub use client::{MispClient, MispClientBuilder, register_user};
+#[cfg(feature = "blocking")]
+pub use client_blocking::{MispClientBlocking, MispClientBlockingBuilder, register_user_blocking};
 pub use error::{MispError, MispResult};
 pub use models::attribute::MispAttribute;
 pub use models::blocklist::{MispEventBlocklist, MispOrganisationBlocklist};
