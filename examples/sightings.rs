@@ -40,7 +40,9 @@ async fn main() -> MispResult<()> {
 
     let attr = MispAttribute::new("ip-dst", "Network activity", "203.0.113.50");
     let created_attr = client.add_attribute(event_id, &attr).await?;
-    let attr_id = created_attr.id.expect("server should assign an attribute id");
+    let attr_id = created_attr
+        .id
+        .expect("server should assign an attribute id");
     println!("Added attribute #{attr_id} (ip-dst: 203.0.113.50)");
 
     // ── 2. Add a regular sighting (type 0 = seen) ───────────────────
@@ -88,7 +90,17 @@ async fn main() -> MispResult<()> {
     // ── 6. Search sightings by source ───────────────────────────────
 
     let results = client
-        .search_sightings("attribute", attr_id, Some("honeypot-alpha"), None, None, None, None, None, None)
+        .search_sightings(
+            "attribute",
+            attr_id,
+            Some("honeypot-alpha"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
         .await?;
     println!("\nSearch results (source=honeypot-alpha): {results}");
 

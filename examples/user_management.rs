@@ -83,8 +83,7 @@ async fn main() -> MispResult<()> {
     let user_id = created_user.id.expect("server should assign an id");
     println!(
         "Created user #{user_id}: {} (role: {})",
-        created_user.email,
-        user_role.name,
+        created_user.email, user_role.name,
     );
 
     // List users.

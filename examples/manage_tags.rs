@@ -10,8 +10,7 @@
 //! ```
 
 use rustmisp::{
-    Analysis, Distribution, MispAttribute, MispClient, MispEvent, MispResult, MispTag,
-    ThreatLevel,
+    Analysis, Distribution, MispAttribute, MispClient, MispEvent, MispResult, MispTag, ThreatLevel,
 };
 
 #[tokio::main]
@@ -87,7 +86,9 @@ async fn main() -> MispResult<()> {
     println!("\nCreated temporary event #{event_id}");
 
     // Tag the event.
-    client.tag(event_uuid, "rustmisp:example-tag", false).await?;
+    client
+        .tag(event_uuid, "rustmisp:example-tag", false)
+        .await?;
     client.tag(event_uuid, "tlp:green", false).await?;
     println!("Tagged event with rustmisp:example-tag and tlp:green");
 
@@ -103,10 +104,7 @@ async fn main() -> MispResult<()> {
 
     // ── 7. Verify tags were attached ─────────────────────────────────────────
     let fetched = client.get_event(event_id).await?;
-    println!(
-        "\nEvent #{event_id} has {} tag(s):",
-        fetched.tags.len()
-    );
+    println!("\nEvent #{event_id} has {} tag(s):", fetched.tags.len());
     for tag in &fetched.tags {
         println!("  - {}", tag.name);
     }
@@ -116,10 +114,7 @@ async fn main() -> MispResult<()> {
     println!("\nRemoved tlp:green from event");
 
     let fetched = client.get_event(event_id).await?;
-    println!(
-        "Event #{event_id} now has {} tag(s):",
-        fetched.tags.len()
-    );
+    println!("Event #{event_id} now has {} tag(s):", fetched.tags.len());
     for tag in &fetched.tags {
         println!("  - {}", tag.name);
     }

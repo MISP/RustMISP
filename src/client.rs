@@ -7,6 +7,7 @@ use serde_json::Value;
 use url::Url;
 
 use crate::error::{MispError, MispResult};
+use crate::models::analyst_data::{AnalystDataType, MispNote, MispOpinion, MispRelationship};
 use crate::models::attribute::MispAttribute;
 use crate::models::blocklist::{MispEventBlocklist, MispOrganisationBlocklist};
 use crate::models::community::MispCommunity;
@@ -969,6 +970,213 @@ impl MispClient {
             format!("eventReports/delete/{id}")
         };
         self.post(&path, &serde_json::json!({})).await
+    }
+
+    // ── Analyst Data (Notes, Opinions, Relationships) ──────────────────
+
+    /// Get analyst data by type and ID.
+    ///
+    /// `data_type` selects the kind of analyst data (Note, Opinion, or Relationship).
+    pub async fn get_analyst_data(&self, data_type: AnalystDataType, id: i64) -> MispResult<Value> {
+        let json = self
+            .get(&format!("analystData/view/{}/{id}", data_type.as_str()))
+            .await?;
+        Ok(json)
+    }
+
+    /// Add analyst data (note, opinion, or relationship).
+    ///
+    /// The `data_type` parameter selects the endpoint, and `data` is the
+    /// JSON body to send.
+    pub async fn add_analyst_data(
+        &self,
+        data_type: AnalystDataType,
+        data: &Value,
+    ) -> MispResult<Value> {
+        self.post(&format!("analystData/add/{}", data_type.as_str()), data)
+            .await
+    }
+
+    /// Update existing analyst data.
+    pub async fn update_analyst_data(
+        &self,
+        data_type: AnalystDataType,
+        id: i64,
+        data: &Value,
+    ) -> MispResult<Value> {
+        self.post(
+            &format!("analystData/edit/{}/{id}", data_type.as_str()),
+            data,
+        )
+        .await
+    }
+
+    /// Delete analyst data by type and ID.
+    pub async fn delete_analyst_data(
+        &self,
+        data_type: AnalystDataType,
+        id: i64,
+    ) -> MispResult<Value> {
+        self.post(
+            &format!("analystData/delete/{}/{id}", data_type.as_str()),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Get a note by ID.
+    pub async fn get_note(&self, id: i64) -> MispResult<MispNote> {
+        let json = self.get(&format!("analystData/view/Note/{id}")).await?;
+        let val = if json.get("Note").is_some() {
+            &json["Note"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Add a note.
+    pub async fn add_note(&self, note: &MispNote) -> MispResult<MispNote> {
+        let body = serde_json::to_value(note)?;
+        let json = self.post("analystData/add/Note", &body).await?;
+        let val = if json.get("Note").is_some() {
+            &json["Note"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Update an existing note.
+    pub async fn update_note(&self, note: &MispNote) -> MispResult<MispNote> {
+        let id = note
+            .id
+            .ok_or_else(|| MispError::MissingField("id".into()))?;
+        let body = serde_json::to_value(note)?;
+        let json = self
+            .post(&format!("analystData/edit/Note/{id}"), &body)
+            .await?;
+        let val = if json.get("Note").is_some() {
+            &json["Note"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Delete a note by ID.
+    pub async fn delete_note(&self, id: i64) -> MispResult<Value> {
+        self.post(
+            &format!("analystData/delete/Note/{id}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Get an opinion by ID.
+    pub async fn get_opinion(&self, id: i64) -> MispResult<MispOpinion> {
+        let json = self.get(&format!("analystData/view/Opinion/{id}")).await?;
+        let val = if json.get("Opinion").is_some() {
+            &json["Opinion"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Add an opinion.
+    pub async fn add_opinion(&self, opinion: &MispOpinion) -> MispResult<MispOpinion> {
+        let body = serde_json::to_value(opinion)?;
+        let json = self.post("analystData/add/Opinion", &body).await?;
+        let val = if json.get("Opinion").is_some() {
+            &json["Opinion"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Update an existing opinion.
+    pub async fn update_opinion(&self, opinion: &MispOpinion) -> MispResult<MispOpinion> {
+        let id = opinion
+            .id
+            .ok_or_else(|| MispError::MissingField("id".into()))?;
+        let body = serde_json::to_value(opinion)?;
+        let json = self
+            .post(&format!("analystData/edit/Opinion/{id}"), &body)
+            .await?;
+        let val = if json.get("Opinion").is_some() {
+            &json["Opinion"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Delete an opinion by ID.
+    pub async fn delete_opinion(&self, id: i64) -> MispResult<Value> {
+        self.post(
+            &format!("analystData/delete/Opinion/{id}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Get a relationship by ID.
+    pub async fn get_relationship(&self, id: i64) -> MispResult<MispRelationship> {
+        let json = self
+            .get(&format!("analystData/view/Relationship/{id}"))
+            .await?;
+        let val = if json.get("Relationship").is_some() {
+            &json["Relationship"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Add a relationship.
+    pub async fn add_relationship(
+        &self,
+        relationship: &MispRelationship,
+    ) -> MispResult<MispRelationship> {
+        let body = serde_json::to_value(relationship)?;
+        let json = self.post("analystData/add/Relationship", &body).await?;
+        let val = if json.get("Relationship").is_some() {
+            &json["Relationship"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Update an existing relationship.
+    pub async fn update_relationship(
+        &self,
+        relationship: &MispRelationship,
+    ) -> MispResult<MispRelationship> {
+        let id = relationship
+            .id
+            .ok_or_else(|| MispError::MissingField("id".into()))?;
+        let body = serde_json::to_value(relationship)?;
+        let json = self
+            .post(&format!("analystData/edit/Relationship/{id}"), &body)
+            .await?;
+        let val = if json.get("Relationship").is_some() {
+            &json["Relationship"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Delete a relationship by ID.
+    pub async fn delete_relationship(&self, id: i64) -> MispResult<Value> {
+        self.post(
+            &format!("analystData/delete/Relationship/{id}"),
+            &serde_json::json!({}),
+        )
+        .await
     }
 
     // ── Taxonomies ──────────────────────────────────────────────────────

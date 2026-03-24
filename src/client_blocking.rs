@@ -18,6 +18,7 @@ use url::Url;
 
 use crate::client::{MispClient, MispClientBuilder};
 use crate::error::{MispError, MispResult};
+use crate::models::analyst_data::{AnalystDataType, MispNote, MispOpinion, MispRelationship};
 use crate::models::attribute::MispAttribute;
 use crate::models::blocklist::{MispEventBlocklist, MispOrganisationBlocklist};
 use crate::models::community::MispCommunity;
@@ -504,6 +505,103 @@ impl MispClientBlocking {
     /// Delete an event report. If `hard` is true, permanently remove it.
     pub fn delete_event_report(&self, id: i64, hard: bool) -> MispResult<Value> {
         self.rt.block_on(self.inner.delete_event_report(id, hard))
+    }
+
+    // ── Analyst Data (Notes, Opinions, Relationships) ──────────────────
+
+    /// Get analyst data by type and ID.
+    pub fn get_analyst_data(&self, data_type: AnalystDataType, id: i64) -> MispResult<Value> {
+        self.rt.block_on(self.inner.get_analyst_data(data_type, id))
+    }
+
+    /// Add analyst data (note, opinion, or relationship).
+    pub fn add_analyst_data(&self, data_type: AnalystDataType, data: &Value) -> MispResult<Value> {
+        self.rt
+            .block_on(self.inner.add_analyst_data(data_type, data))
+    }
+
+    /// Update existing analyst data.
+    pub fn update_analyst_data(
+        &self,
+        data_type: AnalystDataType,
+        id: i64,
+        data: &Value,
+    ) -> MispResult<Value> {
+        self.rt
+            .block_on(self.inner.update_analyst_data(data_type, id, data))
+    }
+
+    /// Delete analyst data by type and ID.
+    pub fn delete_analyst_data(&self, data_type: AnalystDataType, id: i64) -> MispResult<Value> {
+        self.rt
+            .block_on(self.inner.delete_analyst_data(data_type, id))
+    }
+
+    /// Get a note by ID.
+    pub fn get_note(&self, id: i64) -> MispResult<MispNote> {
+        self.rt.block_on(self.inner.get_note(id))
+    }
+
+    /// Add a note.
+    pub fn add_note(&self, note: &MispNote) -> MispResult<MispNote> {
+        self.rt.block_on(self.inner.add_note(note))
+    }
+
+    /// Update an existing note.
+    pub fn update_note(&self, note: &MispNote) -> MispResult<MispNote> {
+        self.rt.block_on(self.inner.update_note(note))
+    }
+
+    /// Delete a note by ID.
+    pub fn delete_note(&self, id: i64) -> MispResult<Value> {
+        self.rt.block_on(self.inner.delete_note(id))
+    }
+
+    /// Get an opinion by ID.
+    pub fn get_opinion(&self, id: i64) -> MispResult<MispOpinion> {
+        self.rt.block_on(self.inner.get_opinion(id))
+    }
+
+    /// Add an opinion.
+    pub fn add_opinion(&self, opinion: &MispOpinion) -> MispResult<MispOpinion> {
+        self.rt.block_on(self.inner.add_opinion(opinion))
+    }
+
+    /// Update an existing opinion.
+    pub fn update_opinion(&self, opinion: &MispOpinion) -> MispResult<MispOpinion> {
+        self.rt.block_on(self.inner.update_opinion(opinion))
+    }
+
+    /// Delete an opinion by ID.
+    pub fn delete_opinion(&self, id: i64) -> MispResult<Value> {
+        self.rt.block_on(self.inner.delete_opinion(id))
+    }
+
+    /// Get a relationship by ID.
+    pub fn get_relationship(&self, id: i64) -> MispResult<MispRelationship> {
+        self.rt.block_on(self.inner.get_relationship(id))
+    }
+
+    /// Add a relationship.
+    pub fn add_relationship(
+        &self,
+        relationship: &MispRelationship,
+    ) -> MispResult<MispRelationship> {
+        self.rt.block_on(self.inner.add_relationship(relationship))
+    }
+
+    /// Update an existing relationship.
+    pub fn update_relationship(
+        &self,
+        relationship: &MispRelationship,
+    ) -> MispResult<MispRelationship> {
+        self.rt
+            .block_on(self.inner.update_relationship(relationship))
+    }
+
+    /// Delete a relationship by ID.
+    pub fn delete_relationship(&self, id: i64) -> MispResult<Value> {
+        self.rt.block_on(self.inner.delete_relationship(id))
     }
 
     // ── Taxonomies ────────────────────────────────────────────────────

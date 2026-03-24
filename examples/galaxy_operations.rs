@@ -10,8 +10,8 @@
 //! ```
 
 use rustmisp::{
-    Analysis, Distribution, MispClient, MispEvent, MispGalaxyCluster,
-    MispGalaxyClusterRelation, MispResult, ThreatLevel,
+    Analysis, Distribution, MispClient, MispEvent, MispGalaxyCluster, MispGalaxyClusterRelation,
+    MispResult, ThreatLevel,
 };
 
 #[tokio::main]
@@ -71,7 +71,8 @@ async fn main() -> MispResult<()> {
 
     // ── 4. Create a custom galaxy cluster ─────────────────────────────────────
     let mut custom_cluster = MispGalaxyCluster::new("RustMISP Example Cluster");
-    custom_cluster.description = Some("A test cluster created by the galaxy_operations example".into());
+    custom_cluster.description =
+        Some("A test cluster created by the galaxy_operations example".into());
     custom_cluster.source = Some("RustMISP".into());
     custom_cluster.authors = Some(vec!["RustMISP Example".into()]);
     custom_cluster.distribution = Some(Distribution::YourOrganisationOnly as i64);
@@ -92,10 +93,7 @@ async fn main() -> MispResult<()> {
     let updated_cluster = client.update_galaxy_cluster(&updated_cluster).await?;
     println!(
         "Updated cluster description: {}",
-        updated_cluster
-            .description
-            .as_deref()
-            .unwrap_or("(none)")
+        updated_cluster.description.as_deref().unwrap_or("(none)")
     );
 
     // ── 6. Fetch the cluster by ID ────────────────────────────────────────────
@@ -129,11 +127,7 @@ async fn main() -> MispResult<()> {
 
     // ── 8. Search galaxy clusters ─────────────────────────────────────────────
     let search_results = client
-        .search_galaxy_clusters(
-            &first_galaxy_id.to_string(),
-            Some("all"),
-            false,
-        )
+        .search_galaxy_clusters(&first_galaxy_id.to_string(), Some("all"), false)
         .await?;
     println!("\n=== Galaxy cluster search results ===");
     println!("{search_results}");
@@ -151,8 +145,7 @@ async fn main() -> MispResult<()> {
     let related_uuid = related.uuid.clone().expect("server should assign a uuid");
     println!("\nCreated related cluster #{related_id}: {}", related.value);
 
-    let mut relation =
-        MispGalaxyClusterRelation::new(&related_uuid, "related-to");
+    let mut relation = MispGalaxyClusterRelation::new(&related_uuid, "related-to");
     relation.galaxy_cluster_id = Some(cluster_id);
     let created_relation = client.add_galaxy_cluster_relation(&relation).await?;
     let relation_id = created_relation

@@ -1,3 +1,5 @@
+/// Analyst data models: notes, opinions, and relationships.
+pub mod analyst_data;
 /// MISP attribute model.
 pub mod attribute;
 /// Event and organisation blocklist models.
@@ -47,6 +49,7 @@ pub mod user_setting;
 /// MISP warninglist model.
 pub mod warninglist;
 
+pub use analyst_data::{AnalystDataType, MispNote, MispOpinion, MispRelationship};
 pub use attribute::MispAttribute;
 pub use blocklist::{MispEventBlocklist, MispOrganisationBlocklist};
 pub use community::MispCommunity;

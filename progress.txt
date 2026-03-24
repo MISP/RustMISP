@@ -150,6 +150,38 @@ PHASE 2: OBJECT MODEL & PROPOSALS
 [x] Unit tests: serde round-trips for all new types
 [x] Unit tests: proposal workflow with wiremock
 
+--- Iteration 5b: Analyst Data (Notes, Opinions, Relationships) ---
+[x] Implement AnalystDataType enum (Note, Opinion, Relationship)
+[x] Implement MispNote struct (serde)
+[x] Implement MispOpinion struct (serde)
+[x] Implement MispRelationship struct (serde)
+[x] Implement get_analyst_data(data_type, id) - GET /analystData/view/{type}/{id}
+[x] Implement add_analyst_data(data_type, data) - POST /analystData/add/{type}
+[x] Implement update_analyst_data(data_type, id, data) - POST /analystData/edit/{type}/{id}
+[x] Implement delete_analyst_data(data_type, id) - POST /analystData/delete/{type}/{id}
+[x] Implement get_note(id) - GET /analystData/view/Note/{id}
+[x] Implement add_note(note) - POST /analystData/add/Note
+[x] Implement update_note(note) - POST /analystData/edit/Note/{id}
+[x] Implement delete_note(id) - POST /analystData/delete/Note/{id}
+[x] Implement get_opinion(id) - GET /analystData/view/Opinion/{id}
+[x] Implement add_opinion(opinion) - POST /analystData/add/Opinion
+[x] Implement update_opinion(opinion) - POST /analystData/edit/Opinion/{id}
+[x] Implement delete_opinion(id) - POST /analystData/delete/Opinion/{id}
+[x] Implement get_relationship(id) - GET /analystData/view/Relationship/{id}
+[x] Implement add_relationship(rel) - POST /analystData/add/Relationship
+[x] Implement update_relationship(rel) - POST /analystData/edit/Relationship/{id}
+[x] Implement delete_relationship(id) - POST /analystData/delete/Relationship/{id}
+[x] Implement blocking wrappers for all analyst data methods
+[x] Unit tests: MispNote serde round-trip
+[x] Unit tests: MispOpinion serde round-trip
+[x] Unit tests: MispRelationship serde round-trip
+[x] Unit tests: builder methods for all types
+[x] Unit tests: MISP wire format deserialization
+[x] Verify: cargo build succeeds
+[x] Verify: cargo test passes (367 tests, all green)
+[x] Verify: cargo clippy -- -D warnings passes
+[x] Verify: cargo doc --no-deps builds cleanly
+
 ================================================================================
 PHASE 3: INTELLIGENCE LAYER
 ================================================================================
@@ -423,5 +455,5 @@ Phase 5 (Search/Advanced):   Iterations 10-11  [ ] Complete
 Phase 6 (Tools/Polish):      Iterations 12-14  [ ] Complete
 
 Total iterations: 15 (0-14)
-Total API methods: ~243
-Total data models: 30+
+Total API methods: ~263 (243 original + 20 analyst data)
+Total data models: 34+ (30+ original + AnalystDataType, MispNote, MispOpinion, MispRelationship)
