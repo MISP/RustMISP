@@ -394,8 +394,8 @@ PHASE 6: TOOLS & POLISH
 [x]   - User/Org management
 [x]   - Sharing group workflow
 [x]   - Feed operations
-[ ] Write examples:
-[ ]   - basic_event.rs
+[~] Write examples:
+[x]   - basic_event.rs
 [ ]   - search_attributes.rs
 [ ]   - manage_tags.rs
 [ ]   - feed_operations.rs

@@ -54,7 +54,10 @@ async fn test_event_crud_lifecycle() {
     event.threat_level_id = Some(4); // Undefined
     event.analysis = Some(0); // Initial
 
-    let created = client.add_event(&event).await.expect("Failed to create event");
+    let created = client
+        .add_event(&event)
+        .await
+        .expect("Failed to create event");
     let event_id = created.id.expect("Created event should have an id");
     assert_eq!(created.info, info);
     assert_eq!(created.distribution, Some(0));
@@ -63,7 +66,10 @@ async fn test_event_crud_lifecycle() {
     assert!(created.uuid.is_some());
 
     // --- READ ---
-    let fetched = client.get_event(event_id).await.expect("Failed to get event");
+    let fetched = client
+        .get_event(event_id)
+        .await
+        .expect("Failed to get event");
     assert_eq!(fetched.id, Some(event_id));
     assert_eq!(fetched.info, info);
 
@@ -88,7 +94,10 @@ async fn test_event_crud_lifecycle() {
         .await
         .expect("Failed to publish event");
 
-    let published_event = client.get_event(event_id).await.expect("Failed to get event");
+    let published_event = client
+        .get_event(event_id)
+        .await
+        .expect("Failed to get event");
     assert!(published_event.published);
 
     let _unpublish_result = client
@@ -96,7 +105,10 @@ async fn test_event_crud_lifecycle() {
         .await
         .expect("Failed to unpublish event");
 
-    let unpublished_event = client.get_event(event_id).await.expect("Failed to get event");
+    let unpublished_event = client
+        .get_event(event_id)
+        .await
+        .expect("Failed to get event");
     assert!(!unpublished_event.published);
 
     // --- DELETE ---
@@ -125,7 +137,10 @@ async fn test_attribute_crud_with_types() {
     // Create a test event to hold attributes
     let mut event = MispEvent::new(test_event_info("attr_crud"));
     event.distribution = Some(0);
-    let created_event = client.add_event(&event).await.expect("Failed to create event");
+    let created_event = client
+        .add_event(&event)
+        .await
+        .expect("Failed to create event");
     let event_id = created_event.id.unwrap();
 
     // --- CREATE various attribute types ---
@@ -145,7 +160,11 @@ async fn test_attribute_crud_with_types() {
         .expect("Failed to add domain attribute");
     assert_eq!(created_domain.attr_type, "domain");
 
-    let md5_attr = MispAttribute::new("md5", "Payload delivery", "d41d8cd98f00b204e9800998ecf8427e");
+    let md5_attr = MispAttribute::new(
+        "md5",
+        "Payload delivery",
+        "d41d8cd98f00b204e9800998ecf8427e",
+    );
     let created_md5 = client
         .add_attribute(event_id, &md5_attr)
         .await
@@ -165,7 +184,10 @@ async fn test_attribute_crud_with_types() {
     assert!(!updated.to_ids);
 
     // --- READ (via event) ---
-    let fetched_event = client.get_event(event_id).await.expect("Failed to get event");
+    let fetched_event = client
+        .get_event(event_id)
+        .await
+        .expect("Failed to get event");
     assert!(
         fetched_event.attributes.len() >= 3,
         "Event should have at least 3 attributes, got {}",
@@ -185,7 +207,10 @@ async fn test_attribute_crud_with_types() {
         .expect("Failed to hard-delete attribute");
 
     // Cleanup
-    client.delete_event(event_id).await.expect("Failed to cleanup event");
+    client
+        .delete_event(event_id)
+        .await
+        .expect("Failed to cleanup event");
 }
 
 // ============================================================================
@@ -200,7 +225,10 @@ async fn test_object_creation_with_templates() {
     // Create a test event
     let mut event = MispEvent::new(test_event_info("object_crud"));
     event.distribution = Some(0);
-    let created_event = client.add_event(&event).await.expect("Failed to create event");
+    let created_event = client
+        .add_event(&event)
+        .await
+        .expect("Failed to create event");
     let event_id = created_event.id.unwrap();
 
     // Create a domain-ip object
@@ -230,10 +258,16 @@ async fn test_object_creation_with_templates() {
         .update_object(&updated_obj)
         .await
         .expect("Failed to update object");
-    assert_eq!(updated.comment, Some("Updated via integration test".to_string()));
+    assert_eq!(
+        updated.comment,
+        Some("Updated via integration test".to_string())
+    );
 
     // --- READ (directly) ---
-    let fetched_obj = client.get_object(obj_id).await.expect("Failed to get object");
+    let fetched_obj = client
+        .get_object(obj_id)
+        .await
+        .expect("Failed to get object");
     assert_eq!(fetched_obj.name, "domain-ip");
 
     // --- DELETE ---
@@ -243,7 +277,10 @@ async fn test_object_creation_with_templates() {
         .expect("Failed to delete object");
 
     // Cleanup
-    client.delete_event(event_id).await.expect("Failed to cleanup event");
+    client
+        .delete_event(event_id)
+        .await
+        .expect("Failed to cleanup event");
 }
 
 // ============================================================================
@@ -258,7 +295,10 @@ async fn test_tag_operations() {
     // Create a test event
     let mut event = MispEvent::new(test_event_info("tag_ops"));
     event.distribution = Some(0);
-    let created_event = client.add_event(&event).await.expect("Failed to create event");
+    let created_event = client
+        .add_event(&event)
+        .await
+        .expect("Failed to create event");
     let event_id = created_event.id.unwrap();
     let event_uuid = created_event.uuid.clone().unwrap();
 
@@ -292,7 +332,10 @@ async fn test_tag_operations() {
         .expect("Failed to tag event");
 
     // Verify tag is on event
-    let tagged_event = client.get_event(event_id).await.expect("Failed to get event");
+    let tagged_event = client
+        .get_event(event_id)
+        .await
+        .expect("Failed to get event");
     assert!(
         tagged_event.tags.iter().any(|t| t.name == tag_name),
         "Event should have the tag attached"
@@ -304,15 +347,24 @@ async fn test_tag_operations() {
         .await
         .expect("Failed to untag event");
 
-    let untagged_event = client.get_event(event_id).await.expect("Failed to get event");
+    let untagged_event = client
+        .get_event(event_id)
+        .await
+        .expect("Failed to get event");
     assert!(
         !untagged_event.tags.iter().any(|t| t.name == tag_name),
         "Event should no longer have the tag"
     );
 
     // Cleanup
-    client.delete_tag(tag_id).await.expect("Failed to delete tag");
-    client.delete_event(event_id).await.expect("Failed to cleanup event");
+    client
+        .delete_tag(tag_id)
+        .await
+        .expect("Failed to delete tag");
+    client
+        .delete_event(event_id)
+        .await
+        .expect("Failed to cleanup event");
 }
 
 // ============================================================================
@@ -327,7 +379,10 @@ async fn test_search_with_complex_queries() {
     // Create events with specific attributes for searching
     let mut event = MispEvent::new(test_event_info("search_test"));
     event.distribution = Some(0);
-    let created_event = client.add_event(&event).await.expect("Failed to create event");
+    let created_event = client
+        .add_event(&event)
+        .await
+        .expect("Failed to create event");
     let event_id = created_event.id.unwrap();
 
     // Add a searchable attribute
@@ -370,11 +425,7 @@ async fn test_search_with_complex_queries() {
     );
 
     // Search with complex query (OR)
-    let complex = build_complex_query(
-        Some(vec![search_value.as_str()]),
-        None,
-        None,
-    );
+    let complex = build_complex_query(Some(vec![search_value.as_str()]), None, None);
     let mut params3 = SearchParameters::default();
     params3.value = Some(complex);
 
@@ -388,7 +439,10 @@ async fn test_search_with_complex_queries() {
     );
 
     // Cleanup
-    client.delete_event(event_id).await.expect("Failed to cleanup event");
+    client
+        .delete_event(event_id)
+        .await
+        .expect("Failed to cleanup event");
 }
 
 // ============================================================================
@@ -403,7 +457,10 @@ async fn test_sighting_operations() {
     // Create event with attribute
     let mut event = MispEvent::new(test_event_info("sighting_ops"));
     event.distribution = Some(0);
-    let created_event = client.add_event(&event).await.expect("Failed to create event");
+    let created_event = client
+        .add_event(&event)
+        .await
+        .expect("Failed to create event");
     let event_id = created_event.id.unwrap();
 
     let attr = MispAttribute::new("ip-dst", "Network activity", "172.16.0.1");
@@ -448,7 +505,10 @@ async fn test_sighting_operations() {
         .expect("Failed to delete sighting");
 
     // Cleanup
-    client.delete_event(event_id).await.expect("Failed to cleanup event");
+    client
+        .delete_event(event_id)
+        .await
+        .expect("Failed to cleanup event");
 }
 
 // ============================================================================
@@ -463,12 +523,18 @@ async fn test_galaxy_attachment() {
     // Create event
     let mut event = MispEvent::new(test_event_info("galaxy_ops"));
     event.distribution = Some(0);
-    let created_event = client.add_event(&event).await.expect("Failed to create event");
+    let created_event = client
+        .add_event(&event)
+        .await
+        .expect("Failed to create event");
     let event_id = created_event.id.unwrap();
     let event_uuid = created_event.uuid.clone().unwrap();
 
     // List galaxies to find one to attach
-    let galaxies = client.galaxies(false).await.expect("Failed to list galaxies");
+    let galaxies = client
+        .galaxies(false)
+        .await
+        .expect("Failed to list galaxies");
     if galaxies.is_empty() {
         eprintln!("No galaxies available, skipping galaxy attachment test");
         client.delete_event(event_id).await.expect("Cleanup");
@@ -499,7 +565,10 @@ async fn test_galaxy_attachment() {
             .expect("Failed to attach galaxy cluster");
 
         // Verify the API call succeeded (galaxy is attached as a tag)
-        let fetched = client.get_event(event_id).await.expect("Failed to get event");
+        let fetched = client
+            .get_event(event_id)
+            .await
+            .expect("Failed to get event");
         // Galaxy clusters are attached as tags with the galaxy cluster's tag_name
         assert!(
             !fetched.tags.is_empty(),
@@ -514,7 +583,10 @@ async fn test_galaxy_attachment() {
     }
 
     // Cleanup
-    client.delete_event(event_id).await.expect("Failed to cleanup event");
+    client
+        .delete_event(event_id)
+        .await
+        .expect("Failed to cleanup event");
 }
 
 // ============================================================================
@@ -548,7 +620,10 @@ async fn test_user_org_management() {
     let user_id = created_user.id.unwrap();
 
     // List users and verify
-    let users = client.users(None, None).await.expect("Failed to list users");
+    let users = client
+        .users(None, None)
+        .await
+        .expect("Failed to list users");
     assert!(
         users.iter().any(|u| u.email == email),
         "Created user should appear in user list"
@@ -570,7 +645,10 @@ async fn test_user_org_management() {
         .expect("Failed to delete user");
 
     // Verify deletion
-    let users_after = client.users(None, None).await.expect("Failed to list users");
+    let users_after = client
+        .users(None, None)
+        .await
+        .expect("Failed to list users");
     assert!(
         !users_after.iter().any(|u| u.email == email),
         "Deleted user should not appear in user list"
