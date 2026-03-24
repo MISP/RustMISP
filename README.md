@@ -153,4 +153,4 @@ Rust 1.85 or later.
 
 ## License
 
-AGPL-3.0-only — same as [MISP](https://github.com/MISP/MISP).
+MIT — see [LICENSE](LICENSE).
