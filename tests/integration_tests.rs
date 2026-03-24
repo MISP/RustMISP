@@ -42,11 +42,7 @@ async fn create_client() -> MispClient {
 }
 
 fn unique(label: &str) -> String {
-    format!(
-        "RustMISP Test - {} - {}",
-        label,
-        uuid::Uuid::new_v4()
-    )
+    format!("RustMISP Test - {} - {}", label, uuid::Uuid::new_v4())
 }
 
 /// Random octet for generating unique IPs in tests.
@@ -134,9 +130,17 @@ fn event_ids_from_vec(events: &[MispEvent]) -> Vec<i64> {
 /// MISP attribute search returns: {"response": {"Attribute": [...]}}
 fn attr_values_from_search(val: &Value) -> Vec<String> {
     // Try response.Attribute[] first (attribute search format)
-    if let Some(arr) = val.pointer("/response/Attribute").and_then(|v| v.as_array()) {
-        return arr.iter()
-            .filter_map(|a| a.get("value").and_then(|v| v.as_str()).map(|s| s.to_string()))
+    if let Some(arr) = val
+        .pointer("/response/Attribute")
+        .and_then(|v| v.as_array())
+    {
+        return arr
+            .iter()
+            .filter_map(|a| {
+                a.get("value")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
             .collect();
     }
     // Fallback: response[] with Attribute wrapper per item
@@ -193,7 +197,10 @@ async fn test_event_crud_lifecycle() {
     updated_event.threat_level_id = Some(1);
     updated_event.analysis = Some(2);
 
-    let updated = client.update_event(&updated_event).await.expect("update_event");
+    let updated = client
+        .update_event(&updated_event)
+        .await
+        .expect("update_event");
     assert_eq!(updated.info, new_info);
     assert_eq!(updated.threat_level_id, Some(1));
     assert_eq!(updated.analysis, Some(2));
@@ -228,7 +235,10 @@ async fn test_exists() {
 
     // Add an attribute so we can test attribute_exists
     let attr = MispAttribute::new("ip-dst", "Network activity", "10.0.0.99");
-    let created_attr = client.add_attribute(event_id, &attr).await.expect("add_attribute");
+    let created_attr = client
+        .add_attribute(event_id, &attr)
+        .await
+        .expect("add_attribute");
     let attr_id = created_attr.id;
 
     // Add a domain-ip object so we can test object_exists
@@ -241,7 +251,12 @@ async fn test_exists() {
 
     // Attribute exists
     let aid = attr_id.unwrap();
-    assert!(client.attribute_exists(aid).await.expect("attribute_exists"));
+    assert!(
+        client
+            .attribute_exists(aid)
+            .await
+            .expect("attribute_exists")
+    );
 
     // Object exists
     let oid = obj_id.unwrap();
@@ -249,9 +264,24 @@ async fn test_exists() {
 
     // Delete and verify non-existence
     client.delete_event(event_id).await.expect("delete_event");
-    assert!(!client.event_exists(event_id).await.expect("event_exists after delete"));
-    assert!(!client.attribute_exists(aid).await.expect("attribute_exists after delete"));
-    assert!(!client.object_exists(oid).await.expect("object_exists after delete"));
+    assert!(
+        !client
+            .event_exists(event_id)
+            .await
+            .expect("event_exists after delete")
+    );
+    assert!(
+        !client
+            .attribute_exists(aid)
+            .await
+            .expect("attribute_exists after delete")
+    );
+    assert!(
+        !client
+            .object_exists(oid)
+            .await
+            .expect("object_exists after delete")
+    );
 }
 
 // ============================================================================
@@ -270,17 +300,30 @@ async fn test_attribute_crud() {
 
     // --- CREATE ---
     let ip_attr = MispAttribute::new("ip-dst", "Network activity", "192.168.1.1");
-    let created_ip = client.add_attribute(event_id, &ip_attr).await.expect("add ip-dst");
+    let created_ip = client
+        .add_attribute(event_id, &ip_attr)
+        .await
+        .expect("add ip-dst");
     assert_eq!(created_ip.attr_type, "ip-dst");
     assert_eq!(created_ip.value, "192.168.1.1");
     let ip_id = created_ip.id.unwrap();
 
     let domain_attr = MispAttribute::new("domain", "Network activity", "example.com");
-    let created_domain = client.add_attribute(event_id, &domain_attr).await.expect("add domain");
+    let created_domain = client
+        .add_attribute(event_id, &domain_attr)
+        .await
+        .expect("add domain");
     assert_eq!(created_domain.attr_type, "domain");
 
-    let md5_attr = MispAttribute::new("md5", "Payload delivery", "d41d8cd98f00b204e9800998ecf8427e");
-    let created_md5 = client.add_attribute(event_id, &md5_attr).await.expect("add md5");
+    let md5_attr = MispAttribute::new(
+        "md5",
+        "Payload delivery",
+        "d41d8cd98f00b204e9800998ecf8427e",
+    );
+    let created_md5 = client
+        .add_attribute(event_id, &md5_attr)
+        .await
+        .expect("add md5");
     assert_eq!(created_md5.attr_type, "md5");
 
     // --- GET single attribute ---
@@ -291,18 +334,27 @@ async fn test_attribute_crud() {
     let mut updated_attr = created_ip.clone();
     updated_attr.comment = "Updated comment".to_string();
     updated_attr.to_ids = false;
-    let updated = client.update_attribute(&updated_attr).await.expect("update_attribute");
+    let updated = client
+        .update_attribute(&updated_attr)
+        .await
+        .expect("update_attribute");
     assert_eq!(updated.comment, "Updated comment");
     assert!(!updated.to_ids);
 
     // Update disable_correlation (mirrors test_edit_attribute)
     let mut dc_attr = updated;
     dc_attr.disable_correlation = true;
-    let dc_updated = client.update_attribute(&dc_attr).await.expect("update disable_correlation");
+    let dc_updated = client
+        .update_attribute(&dc_attr)
+        .await
+        .expect("update disable_correlation");
     assert!(dc_updated.disable_correlation);
     let mut dc_attr2 = dc_updated;
     dc_attr2.disable_correlation = false;
-    let dc_updated2 = client.update_attribute(&dc_attr2).await.expect("update disable_correlation false");
+    let dc_updated2 = client
+        .update_attribute(&dc_attr2)
+        .await
+        .expect("update disable_correlation false");
     assert!(!dc_updated2.disable_correlation);
 
     // --- READ via event ---
@@ -314,10 +366,16 @@ async fn test_attribute_crud() {
     );
 
     // --- SOFT DELETE ---
-    client.delete_attribute(ip_id, false).await.expect("soft delete");
+    client
+        .delete_attribute(ip_id, false)
+        .await
+        .expect("soft delete");
 
     // --- HARD DELETE ---
-    client.delete_attribute(created_md5.id.unwrap(), true).await.expect("hard delete");
+    client
+        .delete_attribute(created_md5.id.unwrap(), true)
+        .await
+        .expect("hard delete");
 
     // Cleanup
     client.delete_event(event_id).await.expect("cleanup");
@@ -347,8 +405,14 @@ async fn test_object_crud() {
     // Update object comment
     let mut updated_obj = created_obj;
     updated_obj.comment = Some("Updated via integration test".to_string());
-    let updated = client.update_object(&updated_obj).await.expect("update_object");
-    assert_eq!(updated.comment, Some("Updated via integration test".to_string()));
+    let updated = client
+        .update_object(&updated_obj)
+        .await
+        .expect("update_object");
+    assert_eq!(
+        updated.comment,
+        Some("Updated via integration test".to_string())
+    );
 
     // Read directly
     let fetched_obj = client.get_object(obj_id).await.expect("get_object");
@@ -359,7 +423,10 @@ async fn test_object_crud() {
     assert_eq!(re_fetched.name, "domain-ip");
 
     // Soft delete
-    client.delete_object(obj_id, false).await.expect("soft delete object");
+    client
+        .delete_object(obj_id, false)
+        .await
+        .expect("soft delete object");
 
     // Cleanup
     client.delete_event(event_id).await.expect("cleanup");
@@ -380,8 +447,14 @@ async fn test_tag_operations() {
     assert!(!all_tags.is_empty(), "Should have at least one tag");
 
     // --- GET ---
-    let first_tag = all_tags.iter().find(|t| t.id.is_some()).expect("tag with id");
-    let tag_detail = client.get_tag(first_tag.id.unwrap()).await.expect("get_tag");
+    let first_tag = all_tags
+        .iter()
+        .find(|t| t.id.is_some())
+        .expect("tag with id");
+    let tag_detail = client
+        .get_tag(first_tag.id.unwrap())
+        .await
+        .expect("get_tag");
     assert_eq!(tag_detail.name, first_tag.name);
 
     // --- CREATE ---
@@ -411,10 +484,16 @@ async fn test_tag_operations() {
 
     // --- SEARCH ---
     // search_tags may return empty on some MISP versions; verify via tags list as fallback
-    let found = client.search_tags(&new_name, false).await.unwrap_or_default();
+    let found = client
+        .search_tags(&new_name, false)
+        .await
+        .unwrap_or_default();
     if found.is_empty() {
         let all = client.tags().await.expect("tags");
-        assert!(all.iter().any(|t| t.name == new_name), "Should find updated tag in tag list");
+        assert!(
+            all.iter().any(|t| t.name == new_name),
+            "Should find updated tag in tag list"
+        );
     }
 
     // --- TAG / UNTAG event ---
@@ -423,21 +502,45 @@ async fn test_tag_operations() {
     let event_id = created_event.id.unwrap();
     let event_uuid = created_event.uuid.clone().unwrap();
 
-    client.tag(&event_uuid, &new_name, false).await.expect("tag event");
+    client
+        .tag(&event_uuid, &new_name, false)
+        .await
+        .expect("tag event");
     let tagged_ev = client.get_event(event_id).await.expect("get_event");
-    assert!(tagged_ev.tags.iter().any(|t| t.name == new_name), "Event should have tag");
+    assert!(
+        tagged_ev.tags.iter().any(|t| t.name == new_name),
+        "Event should have tag"
+    );
 
-    client.untag(&event_uuid, &new_name).await.expect("untag event");
+    client
+        .untag(&event_uuid, &new_name)
+        .await
+        .expect("untag event");
     let untagged_ev = client.get_event(event_id).await.expect("get_event");
-    assert!(!untagged_ev.tags.iter().any(|t| t.name == new_name), "Tag should be removed");
+    assert!(
+        !untagged_ev.tags.iter().any(|t| t.name == new_name),
+        "Tag should be removed"
+    );
 
     // --- TAG attribute ---
     if let Some(attr) = tagged_ev.attributes.first() {
         let attr_uuid = attr.uuid.as_ref().unwrap();
-        client.tag(attr_uuid, &new_name, false).await.expect("tag attribute");
-        let fetched_attr = client.get_attribute(attr.id.unwrap()).await.expect("get_attribute");
-        assert!(fetched_attr.tags.iter().any(|t| t.name == new_name), "Attribute should have tag");
-        client.untag(attr_uuid, &new_name).await.expect("untag attribute");
+        client
+            .tag(attr_uuid, &new_name, false)
+            .await
+            .expect("tag attribute");
+        let fetched_attr = client
+            .get_attribute(attr.id.unwrap())
+            .await
+            .expect("get_attribute");
+        assert!(
+            fetched_attr.tags.iter().any(|t| t.name == new_name),
+            "Attribute should have tag"
+        );
+        client
+            .untag(attr_uuid, &new_name)
+            .await
+            .expect("untag attribute");
     }
 
     // --- DELETE ---
@@ -463,36 +566,59 @@ async fn test_search_value() {
     let first = client.add_event(&first).await.expect("add first");
     let first_id = first.id.unwrap();
     let attr1 = MispAttribute::new("text", "Other", &shared_value);
-    client.add_attribute(first_id, &attr1).await.expect("add attr1");
+    client
+        .add_attribute(first_id, &attr1)
+        .await
+        .expect("add attr1");
 
     let mut second = MispEvent::new(&unique("search_value_2"));
     second.distribution = Some(0);
     let second = client.add_event(&second).await.expect("add second");
     let second_id = second.id.unwrap();
     let attr2 = MispAttribute::new("text", "Other", &shared_value);
-    client.add_attribute(second_id, &attr2).await.expect("add attr2");
+    client
+        .add_attribute(second_id, &attr2)
+        .await
+        .expect("add attr2");
 
     // Search events by value — should find both
     let params = SearchBuilder::new().value(&shared_value).build();
-    let results = client.search(SearchController::Events, &params).await.expect("search events");
+    let results = client
+        .search(SearchController::Events, &params)
+        .await
+        .expect("search events");
     let ids = event_ids_from_search(&results);
     assert!(ids.contains(&first_id), "Should find first event");
     assert!(ids.contains(&second_id), "Should find second event");
 
     // Search attributes by value
-    let results = client.search(SearchController::Attributes, &params).await.expect("search attrs");
+    let results = client
+        .search(SearchController::Attributes, &params)
+        .await
+        .expect("search attrs");
     let vals = attr_values_from_search(&results);
-    assert!(vals.iter().any(|v| v == &shared_value), "Should find shared value in attributes");
+    assert!(
+        vals.iter().any(|v| v == &shared_value),
+        "Should find shared value in attributes"
+    );
 
     // Non-existing value
-    let params = SearchBuilder::new().value(&uuid::Uuid::new_v4().to_string()).build();
-    let results = client.search(SearchController::Events, &params).await.expect("search empty");
+    let params = SearchBuilder::new()
+        .value(&uuid::Uuid::new_v4().to_string())
+        .build();
+    let results = client
+        .search(SearchController::Events, &params)
+        .await
+        .expect("search empty");
     let ids = event_ids_from_search(&results);
     assert!(ids.is_empty(), "Should find no events for random value");
 
     // Cleanup
     client.delete_event(first_id).await.expect("cleanup first");
-    client.delete_event(second_id).await.expect("cleanup second");
+    client
+        .delete_event(second_id)
+        .await
+        .expect("cleanup second");
 }
 
 // ============================================================================
@@ -540,7 +666,10 @@ async fn test_search_type() {
     let mut params = SearchParameters::default();
     params.timestamp = Some(Value::from(ts));
     params.type_attribute = Some(type_query);
-    let results = client.search(SearchController::Events, &params).await.expect("search type");
+    let results = client
+        .search(SearchController::Events, &params)
+        .await
+        .expect("search type");
     let ids = event_ids_from_search(&results);
     assert!(ids.contains(&ev1_id), "Should find ip-dst event");
     assert!(ids.contains(&ev2_id), "Should find ip-src event");
@@ -565,23 +694,38 @@ async fn test_search_tag() {
 
     let tag_a = format!("rustmisp-tag-a:{}", uuid::Uuid::new_v4());
     let tag_b = format!("rustmisp-tag-b:{}", uuid::Uuid::new_v4());
-    client.add_tag(&MispTag::new(&tag_a)).await.expect("add tag_a");
-    client.add_tag(&MispTag::new(&tag_b)).await.expect("add tag_b");
+    client
+        .add_tag(&MispTag::new(&tag_a))
+        .await
+        .expect("add tag_a");
+    client
+        .add_tag(&MispTag::new(&tag_b))
+        .await
+        .expect("add tag_b");
 
     // Event 1: tagged with tag_a
     let mut ev1 = MispEvent::new(&unique("search_tag_1"));
     ev1.distribution = Some(0);
     let ev1 = client.add_event(&ev1).await.expect("add ev1");
     let ev1_id = ev1.id.unwrap();
-    client.tag(ev1.uuid.as_ref().unwrap(), &tag_a, false).await.expect("tag ev1");
+    client
+        .tag(ev1.uuid.as_ref().unwrap(), &tag_a, false)
+        .await
+        .expect("tag ev1");
 
     // Event 2: tagged with tag_a AND tag_b
     let mut ev2 = MispEvent::new(&unique("search_tag_2"));
     ev2.distribution = Some(0);
     let ev2 = client.add_event(&ev2).await.expect("add ev2");
     let ev2_id = ev2.id.unwrap();
-    client.tag(ev2.uuid.as_ref().unwrap(), &tag_a, false).await.expect("tag ev2 a");
-    client.tag(ev2.uuid.as_ref().unwrap(), &tag_b, false).await.expect("tag ev2 b");
+    client
+        .tag(ev2.uuid.as_ref().unwrap(), &tag_a, false)
+        .await
+        .expect("tag ev2 a");
+    client
+        .tag(ev2.uuid.as_ref().unwrap(), &tag_b, false)
+        .await
+        .expect("tag ev2 b");
 
     // Event 3: no tags
     let mut ev3 = MispEvent::new(&unique("search_tag_3"));
@@ -593,7 +737,10 @@ async fn test_search_tag() {
     let mut params = SearchParameters::default();
     params.timestamp = Some(Value::from(ts));
     params.tags = Some(Value::String(tag_a.clone()));
-    let results = client.search(SearchController::Events, &params).await.expect("search tag_a");
+    let results = client
+        .search(SearchController::Events, &params)
+        .await
+        .expect("search tag_a");
     let ids = event_ids_from_search(&results);
     assert!(ids.contains(&ev1_id), "tag_a should match ev1");
     assert!(ids.contains(&ev2_id), "tag_a should match ev2");
@@ -601,7 +748,10 @@ async fn test_search_tag() {
 
     // Search by tag_b — only ev2
     params.tags = Some(Value::String(tag_b.clone()));
-    let results = client.search(SearchController::Events, &params).await.expect("search tag_b");
+    let results = client
+        .search(SearchController::Events, &params)
+        .await
+        .expect("search tag_b");
     let ids = event_ids_from_search(&results);
     assert!(ids.contains(&ev2_id), "tag_b should match ev2");
     assert!(!ids.contains(&ev1_id), "tag_b should not match ev1");
@@ -609,10 +759,16 @@ async fn test_search_tag() {
     // Advanced: tag_a AND NOT tag_b — only ev1
     let complex = build_complex_query(Some(vec![tag_a.as_str()]), None, Some(vec![tag_b.as_str()]));
     params.tags = Some(complex);
-    let results = client.search(SearchController::Events, &params).await.expect("search advanced");
+    let results = client
+        .search(SearchController::Events, &params)
+        .await
+        .expect("search advanced");
     let ids = event_ids_from_search(&results);
     assert!(ids.contains(&ev1_id), "Advanced: should find ev1");
-    assert!(!ids.contains(&ev2_id), "Advanced: should exclude ev2 (has tag_b)");
+    assert!(
+        !ids.contains(&ev2_id),
+        "Advanced: should exclude ev2 (has tag_b)"
+    );
 
     // Cleanup
     client.delete_event(ev1_id).await.expect("cleanup");
@@ -643,10 +799,11 @@ async fn test_search_timestamp() {
     let event_id = created.id.unwrap();
 
     // Search with timestamp slightly before creation — should find our event
-    let params = SearchBuilder::new()
-        .event_id(event_id)
-        .build();
-    let results = client.search(SearchController::Events, &params).await.expect("search ts");
+    let params = SearchBuilder::new().event_id(event_id).build();
+    let results = client
+        .search(SearchController::Events, &params)
+        .await
+        .expect("search ts");
     let ids = event_ids_from_search(&results);
     assert!(ids.contains(&event_id), "Should find event by id");
 
@@ -654,7 +811,10 @@ async fn test_search_timestamp() {
     let mut params = SearchParameters::default();
     params.timestamp = Some(Value::from(before));
     params.event_id = Some(Value::from(event_id));
-    let results = client.search(SearchController::Events, &params).await.expect("search ts range");
+    let results = client
+        .search(SearchController::Events, &params)
+        .await
+        .expect("search ts range");
     let ids = event_ids_from_search(&results);
     assert!(ids.contains(&event_id), "Should find event by timestamp");
 
@@ -690,10 +850,14 @@ async fn test_search_publish_and_metadata() {
     let mut params = SearchParameters::default();
     params.event_id = Some(Value::from(ev1_id));
     params.metadata = Some(true);
-    let results = client.search(SearchController::Events, &params).await.expect("metadata search");
+    let results = client
+        .search(SearchController::Events, &params)
+        .await
+        .expect("metadata search");
     if let Some(arr) = results.get("response").and_then(|r| r.as_array()) {
         for ev in arr {
-            let attrs = ev.get("Event")
+            let attrs = ev
+                .get("Event")
                 .and_then(|e| e.get("Attribute"))
                 .and_then(|a| a.as_array());
             assert!(
@@ -707,7 +871,10 @@ async fn test_search_publish_and_metadata() {
     let mut params = SearchParameters::default();
     params.timestamp = Some(Value::from(ts));
     params.published = Some(false);
-    let results = client.search(SearchController::Events, &params).await.expect("search unpublished");
+    let results = client
+        .search(SearchController::Events, &params)
+        .await
+        .expect("search unpublished");
     let ids = event_ids_from_search(&results);
     assert!(ids.contains(&ev1_id), "Unpublished ev1");
     assert!(ids.contains(&ev2_id), "Unpublished ev2");
@@ -717,7 +884,10 @@ async fn test_search_publish_and_metadata() {
     let mut params = SearchParameters::default();
     params.timestamp = Some(Value::from(ts));
     params.published = Some(true);
-    let results = client.search(SearchController::Events, &params).await.expect("search published");
+    let results = client
+        .search(SearchController::Events, &params)
+        .await
+        .expect("search published");
     let ids = event_ids_from_search(&results);
     assert!(ids.contains(&ev1_id), "Published ev1 should appear");
     assert!(!ids.contains(&ev2_id), "Unpublished ev2 should not appear");
@@ -770,7 +940,11 @@ async fn test_search_index() {
     params.page = Some(1);
     let page1 = client.search_index(&params).await.expect("page1");
     let ids1 = event_ids_from_vec(&page1);
-    assert!(ids1.len() <= 2, "Page with limit 2 should return at most 2, got {}", ids1.len());
+    assert!(
+        ids1.len() <= 2,
+        "Page with limit 2 should return at most 2, got {}",
+        ids1.len()
+    );
     assert!(!ids1.is_empty(), "Page 1 should have results");
 
     // Cleanup
@@ -800,28 +974,37 @@ async fn test_search_filters() {
 
     let mut ip = MispAttribute::new("ip-src", "Network activity", &ip_val);
     ip.to_ids = true;
-    client.add_attribute(event_id, &ip).await.expect("add ip-src");
+    client
+        .add_attribute(event_id, &ip)
+        .await
+        .expect("add ip-src");
 
     let mut txt = MispAttribute::new("text", "Other", &text_val);
     txt.to_ids = false;
-    client.add_attribute(event_id, &txt).await.expect("add text");
+    client
+        .add_attribute(event_id, &txt)
+        .await
+        .expect("add text");
 
     // Search by category — scoped to our event
     let params = SearchBuilder::new()
         .event_id(event_id)
         .category("Network activity")
         .build();
-    let results = client.search(SearchController::Attributes, &params).await.expect("search category");
+    let results = client
+        .search(SearchController::Attributes, &params)
+        .await
+        .expect("search category");
     let vals = attr_values_from_search(&results);
     assert!(vals.iter().any(|v| v == &ip_val), "Should find ip-src");
     assert!(!vals.iter().any(|v| v == &text_val), "Should not find text");
 
     // Search to_ids=true — scoped to our event
-    let params = SearchBuilder::new()
-        .event_id(event_id)
-        .to_ids(true)
-        .build();
-    let results = client.search(SearchController::Attributes, &params).await.expect("search to_ids");
+    let params = SearchBuilder::new().event_id(event_id).to_ids(true).build();
+    let results = client
+        .search(SearchController::Attributes, &params)
+        .await
+        .expect("search to_ids");
     let vals = attr_values_from_search(&results);
     assert!(vals.iter().any(|v| v == &ip_val), "ip-src has to_ids=true");
 
@@ -844,35 +1027,63 @@ async fn test_sighting_operations() {
     let event_id = created.id.unwrap();
 
     let attr = MispAttribute::new("ip-dst", "Network activity", "172.16.0.1");
-    let created_attr = client.add_attribute(event_id, &attr).await.expect("add attr");
+    let created_attr = client
+        .add_attribute(event_id, &attr)
+        .await
+        .expect("add attr");
     let attr_id = created_attr.id.unwrap();
 
     // Add positive sighting
     let sighting = MispSighting::new();
-    let s1 = client.add_sighting(&sighting, Some(attr_id)).await.expect("add sighting");
+    let s1 = client
+        .add_sighting(&sighting, Some(attr_id))
+        .await
+        .expect("add sighting");
     assert!(s1.id.is_some());
     let s1_id = s1.id.unwrap();
 
     // Add false-positive sighting (type=1) with source
     let mut fp = MispSighting::false_positive();
     fp.source = Some("RustMISP-test".to_string());
-    let s2 = client.add_sighting(&fp, Some(attr_id)).await.expect("add fp sighting");
+    let s2 = client
+        .add_sighting(&fp, Some(attr_id))
+        .await
+        .expect("add fp sighting");
     assert!(s2.id.is_some());
 
     // List sightings for attribute
     let sightings = client.sightings(attr_id).await.expect("sightings");
-    assert!(sightings.len() >= 2, "Should have >= 2 sightings, got {}", sightings.len());
+    assert!(
+        sightings.len() >= 2,
+        "Should have >= 2 sightings, got {}",
+        sightings.len()
+    );
 
     // Verify sighting types
-    assert!(sightings.iter().any(|s| s.sighting_type == Some(0)), "Should have type 0");
-    assert!(sightings.iter().any(|s| s.sighting_type == Some(1)), "Should have type 1 (fp)");
+    assert!(
+        sightings.iter().any(|s| s.sighting_type == Some(0)),
+        "Should have type 0"
+    );
+    assert!(
+        sightings.iter().any(|s| s.sighting_type == Some(1)),
+        "Should have type 1 (fp)"
+    );
 
     // Delete sighting
-    client.delete_sighting(s1_id).await.expect("delete sighting");
+    client
+        .delete_sighting(s1_id)
+        .await
+        .expect("delete sighting");
 
     // Verify one fewer sighting
-    let after = client.sightings(attr_id).await.expect("sightings after delete");
-    assert!(after.len() < sightings.len(), "Should have fewer sightings after delete");
+    let after = client
+        .sightings(attr_id)
+        .await
+        .expect("sightings after delete");
+    assert!(
+        after.len() < sightings.len(),
+        "Should have fewer sightings after delete"
+    );
 
     // Cleanup
     client.delete_event(event_id).await.expect("cleanup");
@@ -930,17 +1141,28 @@ async fn test_galaxy_operations() {
 
     // Attach galaxy cluster to ATTRIBUTE (mirrors PyMISP test_attach_galaxy_cluster)
     let attr = MispAttribute::new("ip-dst", "Network activity", "10.20.30.40");
-    let created_attr = client.add_attribute(event_id, &attr).await.expect("add attr");
+    let created_attr = client
+        .add_attribute(event_id, &attr)
+        .await
+        .expect("add attr");
     let attr_id = created_attr.id.unwrap();
 
     client
-        .attach_galaxy_cluster_to(&attr_id.to_string(), &cluster_id.to_string(), "attribute", false)
+        .attach_galaxy_cluster_to(
+            &attr_id.to_string(),
+            &cluster_id.to_string(),
+            "attribute",
+            false,
+        )
         .await
         .expect("attach to attribute");
 
     // Verify — the attribute should now have a galaxy tag
     let fetched_attr = client.get_attribute(attr_id).await.expect("get_attribute");
-    assert!(!fetched_attr.tags.is_empty(), "Attribute should have galaxy tag");
+    assert!(
+        !fetched_attr.tags.is_empty(),
+        "Attribute should have galaxy tag"
+    );
 
     // Cleanup
     client.delete_event(event_id).await.expect("cleanup");
@@ -957,12 +1179,18 @@ async fn test_user_management() {
     let client = create_client().await;
 
     // List orgs and pick the first
-    let orgs = client.organisations(None, None).await.expect("organisations");
+    let orgs = client
+        .organisations(None, None)
+        .await
+        .expect("organisations");
     assert!(!orgs.is_empty());
     let org_id = orgs[0].id.unwrap();
 
     // Get organisation
-    let org = client.get_organisation(org_id).await.expect("get_organisation");
+    let org = client
+        .get_organisation(org_id)
+        .await
+        .expect("get_organisation");
     assert_eq!(org.id, Some(org_id));
 
     // List roles dynamically
@@ -991,7 +1219,10 @@ async fn test_user_management() {
     // Update user
     let mut updated_user = created;
     updated_user.disabled = true;
-    let updated = client.update_user(&updated_user).await.expect("update_user");
+    let updated = client
+        .update_user(&updated_user)
+        .await
+        .expect("update_user");
     assert!(updated.disabled);
 
     // Delete user
@@ -1016,7 +1247,10 @@ async fn test_sharing_group_workflow() {
     sg.releasability = Some("Testing".to_string());
 
     // --- CREATE ---
-    let created = client.add_sharing_group(&sg).await.expect("add_sharing_group");
+    let created = client
+        .add_sharing_group(&sg)
+        .await
+        .expect("add_sharing_group");
     assert_eq!(created.name, sg_name);
     assert_eq!(created.releasability, Some("Testing".to_string()));
     let sg_id = created.id.unwrap();
@@ -1025,29 +1259,46 @@ async fn test_sharing_group_workflow() {
     // --- UPDATE ---
     let mut upd = created;
     upd.releasability = Some("Testing updated".to_string());
-    let updated = client.update_sharing_group(&upd).await.expect("update_sharing_group");
+    let updated = client
+        .update_sharing_group(&upd)
+        .await
+        .expect("update_sharing_group");
     assert_eq!(updated.releasability, Some("Testing updated".to_string()));
 
     // Update name
     let mut upd2 = updated;
     upd2.name = format!("{} - renamed", sg_name);
-    let renamed = client.update_sharing_group(&upd2).await.expect("update name");
+    let renamed = client
+        .update_sharing_group(&upd2)
+        .await
+        .expect("update name");
     assert_eq!(renamed.name, format!("{} - renamed", sg_name));
 
     // --- EXISTS ---
-    assert!(client.sharing_group_exists(sg_id).await.expect("exists by id"));
+    assert!(
+        client
+            .sharing_group_exists(sg_id)
+            .await
+            .expect("exists by id")
+    );
 
     // --- ADD ORG ---
     let orgs = client.organisations(None, None).await.expect("orgs");
     let org_id = orgs[0].id.unwrap();
-    client.add_org_to_sharing_group(sg_id, org_id).await.expect("add org to sg");
+    client
+        .add_org_to_sharing_group(sg_id, org_id)
+        .await
+        .expect("add org to sg");
 
     // --- LIST ---
     let sgs = client.sharing_groups().await.expect("sharing_groups");
     assert!(!sgs.is_empty());
 
     // --- REMOVE ORG ---
-    client.remove_org_from_sharing_group(sg_id, org_id).await.expect("remove org from sg");
+    client
+        .remove_org_from_sharing_group(sg_id, org_id)
+        .await
+        .expect("remove org from sg");
 
     // --- CHANGE SG ON ENTITY ---
     let ev = simple_event();
@@ -1056,7 +1307,10 @@ async fn test_sharing_group_workflow() {
 
     let ev_uuid = created_ev.uuid.as_deref().unwrap();
     // change_sharing_group_on_entity may not exist in all MISP versions
-    match client.change_sharing_group_on_entity(ev_uuid, sg_id, "Event").await {
+    match client
+        .change_sharing_group_on_entity(ev_uuid, sg_id, "Event")
+        .await
+    {
         Ok(result) => {
             assert!(result.is_object() || result.is_string());
         }
@@ -1067,10 +1321,18 @@ async fn test_sharing_group_workflow() {
 
     // --- DELETE ---
     client.delete_event(event_id).await.expect("cleanup event");
-    client.delete_sharing_group(sg_id).await.expect("delete_sharing_group");
+    client
+        .delete_sharing_group(sg_id)
+        .await
+        .expect("delete_sharing_group");
 
     // Verify non-existence after delete
-    assert!(!client.sharing_group_exists(sg_id).await.expect("exists after delete"));
+    assert!(
+        !client
+            .sharing_group_exists(sg_id)
+            .await
+            .expect("exists after delete")
+    );
 }
 
 // ============================================================================
@@ -1110,12 +1372,21 @@ async fn test_feed_operations() {
 
     // Enable cache (may not exist in all MISP versions)
     if let Ok(_) = client.enable_feed_cache(feed_id).await {
-        let f = client.get_feed(feed_id).await.expect("get after cache enable");
+        let f = client
+            .get_feed(feed_id)
+            .await
+            .expect("get after cache enable");
         assert!(f.caching_enabled, "Caching should be enabled");
 
         // Disable cache
-        client.disable_feed_cache(feed_id).await.expect("disable_feed_cache");
-        let f = client.get_feed(feed_id).await.expect("get after cache disable");
+        client
+            .disable_feed_cache(feed_id)
+            .await
+            .expect("disable_feed_cache");
+        let f = client
+            .get_feed(feed_id)
+            .await
+            .expect("get after cache disable");
         assert!(!f.caching_enabled, "Caching should be disabled");
     }
 
@@ -1129,7 +1400,10 @@ async fn test_feed_operations() {
 
     // --- LIST ---
     let feeds = client.feeds().await.expect("feeds");
-    assert!(!feeds.iter().any(|f| f.id == Some(feed_id)), "Deleted feed should not appear");
+    assert!(
+        !feeds.iter().any(|f| f.id == Some(feed_id)),
+        "Deleted feed should not appear"
+    );
 }
 
 // ============================================================================
@@ -1147,34 +1421,53 @@ async fn test_event_report_crud() {
     let event_id = created_ev.id.unwrap();
 
     // Create report
-    let mut report = MispEventReport::new("Test Event Report", "# Example report\n\nThis is a test.");
+    let mut report =
+        MispEventReport::new("Test Event Report", "# Example report\n\nThis is a test.");
     report.distribution = Some(5); // Inherit
 
-    let created = client.add_event_report(event_id, &report).await.expect("add_event_report");
+    let created = client
+        .add_event_report(event_id, &report)
+        .await
+        .expect("add_event_report");
     assert_eq!(created.event_id, Some(event_id));
     let report_id = created.id.unwrap();
 
     // Verify reports exist for event
-    let reports = client.get_event_reports(event_id).await.expect("get_event_reports");
+    let reports = client
+        .get_event_reports(event_id)
+        .await
+        .expect("get_event_reports");
     assert!(!reports.is_empty(), "Event should have reports");
 
     // Update report
     let mut upd = created;
     upd.name = "Updated Report".to_string();
     upd.content = "Updated content".to_string();
-    let updated = client.update_event_report(&upd).await.expect("update_event_report");
+    let updated = client
+        .update_event_report(&upd)
+        .await
+        .expect("update_event_report");
     assert_eq!(updated.name, "Updated Report");
     assert_eq!(updated.content, "Updated content");
 
     // Get reports for event
-    let reports = client.get_event_reports(event_id).await.expect("get_event_reports");
+    let reports = client
+        .get_event_reports(event_id)
+        .await
+        .expect("get_event_reports");
     assert!(reports.iter().any(|r| r.id == Some(report_id)));
 
     // Soft delete
-    client.delete_event_report(report_id, false).await.expect("soft delete report");
+    client
+        .delete_event_report(report_id, false)
+        .await
+        .expect("soft delete report");
 
     // Hard delete
-    client.delete_event_report(report_id, true).await.expect("hard delete report");
+    client
+        .delete_event_report(report_id, true)
+        .await
+        .expect("hard delete report");
 
     // Cleanup
     client.delete_event(event_id).await.expect("cleanup");
@@ -1197,7 +1490,10 @@ async fn test_analyst_data_crud() {
     note.object_uuid = Some(fake_uuid.clone());
 
     let created_note = client.add_note(&note).await.expect("add_note");
-    assert_eq!(created_note.object_uuid.as_deref(), Some(fake_uuid.as_str()));
+    assert_eq!(
+        created_note.object_uuid.as_deref(),
+        Some(fake_uuid.as_str())
+    );
     let note_id = created_note.id.unwrap();
 
     // Update note
@@ -1224,7 +1520,10 @@ async fn test_analyst_data_crud() {
     event_note.object_uuid = Some(event_uuid.clone());
     event_note.distribution = Some(1);
 
-    let en = client.add_note(&event_note).await.expect("add note to event");
+    let en = client
+        .add_note(&event_note)
+        .await
+        .expect("add note to event");
     assert_eq!(en.object_uuid.as_deref(), Some(event_uuid.as_str()));
     let event_note_id = en.id.unwrap();
 
@@ -1248,7 +1547,10 @@ async fn test_taxonomy_operations() {
     assert!(!taxonomies.is_empty(), "Should have taxonomies");
 
     // Find a taxonomy to work with
-    let tax = taxonomies.iter().find(|t| t.id.is_some()).expect("taxonomy with id");
+    let tax = taxonomies
+        .iter()
+        .find(|t| t.id.is_some())
+        .expect("taxonomy with id");
     let tax_id = tax.id.unwrap();
 
     // Get taxonomy
@@ -1257,12 +1559,21 @@ async fn test_taxonomy_operations() {
     let was_enabled = fetched.enabled;
 
     // Enable then disable — restore original state afterward
-    client.enable_taxonomy(tax_id).await.expect("enable_taxonomy");
-    client.disable_taxonomy(tax_id).await.expect("disable_taxonomy");
+    client
+        .enable_taxonomy(tax_id)
+        .await
+        .expect("enable_taxonomy");
+    client
+        .disable_taxonomy(tax_id)
+        .await
+        .expect("disable_taxonomy");
 
     // Restore original state
     if was_enabled {
-        client.enable_taxonomy(tax_id).await.expect("restore taxonomy");
+        client
+            .enable_taxonomy(tax_id)
+            .await
+            .expect("restore taxonomy");
     }
 }
 
@@ -1283,7 +1594,10 @@ async fn test_warninglist_operations() {
     // Get warninglist
     let wl = wls.iter().find(|w| w.id.is_some()).expect("wl with id");
     let wl_id = wl.id.unwrap();
-    let fetched = client.get_warninglist(wl_id).await.expect("get_warninglist");
+    let fetched = client
+        .get_warninglist(wl_id)
+        .await
+        .expect("get_warninglist");
     assert_eq!(fetched.id, Some(wl_id));
     let was_enabled = fetched.enabled;
 
@@ -1293,7 +1607,10 @@ async fn test_warninglist_operations() {
 
     // Restore original state
     if was_enabled {
-        client.enable_warninglist(wl_id).await.expect("restore warninglist");
+        client
+            .enable_warninglist(wl_id)
+            .await
+            .expect("restore warninglist");
     }
 
     // Check values in warninglist
@@ -1301,7 +1618,10 @@ async fn test_warninglist_operations() {
         .values_in_warninglist(&["8.8.8.8", "192.168.1.1"])
         .await
         .expect("values_in_warninglist");
-    assert!(result.is_object() || result.is_array(), "Should return valid JSON");
+    assert!(
+        result.is_object() || result.is_array(),
+        "Should return valid JSON"
+    );
 }
 
 // ============================================================================
@@ -1344,12 +1664,18 @@ async fn test_role_operations() {
     // Set default role (then restore)
     let original_default = roles.iter().find(|r| r.default_role);
     let user_role_id = user_role.unwrap().id.unwrap();
-    client.set_default_role(user_role_id).await.expect("set_default_role");
+    client
+        .set_default_role(user_role_id)
+        .await
+        .expect("set_default_role");
 
     // Restore if we had a different default
     if let Some(orig) = original_default {
         if orig.id != Some(user_role_id) {
-            client.set_default_role(orig.id.unwrap()).await.expect("restore default");
+            client
+                .set_default_role(orig.id.unwrap())
+                .await
+                .expect("restore default");
         }
     }
 }
@@ -1367,12 +1693,26 @@ async fn test_blocklist_operations() {
     // Event blocklist — use a random UUID
     // Note: blocklist endpoints may not be available in all MISP versions
     let test_uuid = uuid::Uuid::new_v4().to_string();
-    match client.add_event_blocklist(&[test_uuid.as_str()], Some("RustMISP test blocklist"), None, None).await {
+    match client
+        .add_event_blocklist(
+            &[test_uuid.as_str()],
+            Some("RustMISP test blocklist"),
+            None,
+            None,
+        )
+        .await
+    {
         Ok(_) => {
             let bls = client.event_blocklists().await.expect("event_blocklists");
-            if let Some(bl_entry) = bls.iter().find(|b| b.event_uuid.as_deref() == Some(test_uuid.as_str())) {
+            if let Some(bl_entry) = bls
+                .iter()
+                .find(|b| b.event_uuid.as_deref() == Some(test_uuid.as_str()))
+            {
                 let bl_id = bl_entry.id.unwrap();
-                client.delete_event_blocklist(bl_id).await.expect("delete event blocklist");
+                client
+                    .delete_event_blocklist(bl_id)
+                    .await
+                    .expect("delete event blocklist");
             }
         }
         Err(e) => {
@@ -1382,12 +1722,28 @@ async fn test_blocklist_operations() {
 
     // Org blocklist
     let org_uuid = uuid::Uuid::new_v4().to_string();
-    match client.add_organisation_blocklist(&[org_uuid.as_str()], Some("RustMISP org blocklist test"), None).await {
+    match client
+        .add_organisation_blocklist(
+            &[org_uuid.as_str()],
+            Some("RustMISP org blocklist test"),
+            None,
+        )
+        .await
+    {
         Ok(_) => {
-            let obls = client.organisation_blocklists().await.expect("org_blocklists");
-            if let Some(obl_entry) = obls.iter().find(|b| b.org_uuid.as_deref() == Some(org_uuid.as_str())) {
+            let obls = client
+                .organisation_blocklists()
+                .await
+                .expect("org_blocklists");
+            if let Some(obl_entry) = obls
+                .iter()
+                .find(|b| b.org_uuid.as_deref() == Some(org_uuid.as_str()))
+            {
                 let obl_id = obl_entry.id.unwrap();
-                client.delete_organisation_blocklist(obl_id).await.expect("delete org blocklist");
+                client
+                    .delete_organisation_blocklist(obl_id)
+                    .await
+                    .expect("delete org blocklist");
             }
         }
         Err(e) => {
@@ -1413,13 +1769,19 @@ async fn test_correlation_exclusion_operations() {
         .expect("add correlation exclusion");
     let excl_id = excl.id.unwrap();
 
-    let fetched = client.get_correlation_exclusion(excl_id).await.expect("get");
+    let fetched = client
+        .get_correlation_exclusion(excl_id)
+        .await
+        .expect("get");
     assert_eq!(fetched.id, Some(excl_id));
 
     let all = client.correlation_exclusions().await.expect("list");
     assert!(all.iter().any(|e| e.id == Some(excl_id)));
 
-    client.delete_correlation_exclusion(excl_id).await.expect("delete");
+    client
+        .delete_correlation_exclusion(excl_id)
+        .await
+        .expect("delete");
 }
 
 // ============================================================================
@@ -1453,7 +1815,9 @@ async fn test_user_settings() {
 
     // Set a user setting
     let val = serde_json::json!("test-value");
-    let _ = client.set_user_setting("dashboard_access", &val, None).await;
+    let _ = client
+        .set_user_setting("dashboard_access", &val, None)
+        .await;
 
     // Get it back
     if let Ok(s) = client.get_user_setting("dashboard_access", None).await {
@@ -1474,7 +1838,10 @@ async fn test_user_settings() {
 async fn test_statistics() {
     let client = create_client().await;
 
-    let attr_stats = client.attributes_statistics(None, None).await.expect("attr stats");
+    let attr_stats = client
+        .attributes_statistics(None, None)
+        .await
+        .expect("attr stats");
     assert!(attr_stats.is_object(), "Should return JSON object");
 
     let tag_stats = client.tags_statistics(None, None).await.expect("tag stats");
@@ -1499,9 +1866,15 @@ async fn test_freetext() {
     let event_id = created.id.unwrap();
 
     // freetext may not be available in all MISP versions
-    match client.freetext(event_id, "1.2.3.4 evil.example.com", None, None, None).await {
+    match client
+        .freetext(event_id, "1.2.3.4 evil.example.com", None, None, None)
+        .await
+    {
         Ok(result) => {
-            assert!(result.is_array() || result.is_object(), "Freetext should return parsed results");
+            assert!(
+                result.is_array() || result.is_object(),
+                "Freetext should return parsed results"
+            );
         }
         Err(e) => {
             eprintln!("freetext not available on this MISP instance: {e}");

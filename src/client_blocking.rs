@@ -840,10 +840,12 @@ impl MispClientBlocking {
         target_type: &str,
         local: bool,
     ) -> MispResult<Value> {
-        self.rt.block_on(
-            self.inner
-                .attach_galaxy_cluster_to(target_id, cluster_id, target_type, local),
-        )
+        self.rt.block_on(self.inner.attach_galaxy_cluster_to(
+            target_id,
+            cluster_id,
+            target_type,
+            local,
+        ))
     }
 
     // ── Decaying Models ───────────────────────────────────────────────
