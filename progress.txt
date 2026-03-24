@@ -383,17 +383,17 @@ PHASE 6: TOOLS & POLISH
 [x] Unit tests: blocking client mirrors async behavior
 
 --- Iteration 14: Integration Tests, Examples, Documentation ---
-[ ] Write Rust integration tests mirroring testlive_comprehensive.py key scenarios:
-[ ]   - Event CRUD lifecycle
-[ ]   - Attribute CRUD with types
-[ ]   - Object creation with templates
-[ ]   - Tag operations
-[ ]   - Search with complex queries
-[ ]   - Sighting operations
-[ ]   - Galaxy attachment
-[ ]   - User/Org management
-[ ]   - Sharing group workflow
-[ ]   - Feed operations
+[x] Write Rust integration tests mirroring testlive_comprehensive.py key scenarios:
+[x]   - Event CRUD lifecycle
+[x]   - Attribute CRUD with types
+[x]   - Object creation with templates
+[x]   - Tag operations
+[x]   - Search with complex queries
+[x]   - Sighting operations
+[x]   - Galaxy attachment
+[x]   - User/Org management
+[x]   - Sharing group workflow
+[x]   - Feed operations
 [ ] Write examples:
 [ ]   - basic_event.rs
 [ ]   - search_attributes.rs
