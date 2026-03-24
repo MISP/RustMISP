@@ -2,10 +2,10 @@
 name = "rustmisp"
 version = "0.1.0"
 edition = "2024"
-authors = ["MISP Project <info@misp-project.org>"]
+authors = ["Andras Iklody <andras.iklody@gmail.com>"]
 description = "Rust client library for the MISP REST API"
-license = "AGPL-3.0-only"
-repository = "https://github.com/MISP/RustMISP"
+license = "MIT"
+repository = "https://github.com/iglocska/RustMISP"
 documentation = "https://docs.rs/rustmisp"
 readme = "README.md"
 keywords = ["misp", "threat-intelligence", "ioc", "security"]
