@@ -398,7 +398,7 @@ PHASE 6: TOOLS & POLISH
 [x]   - basic_event.rs
 [x]   - search_attributes.rs
 [x]   - manage_tags.rs
-[ ]   - feed_operations.rs
+[x]   - feed_operations.rs
 [ ]   - user_management.rs
 [ ]   - galaxy_operations.rs
 [ ]   - sightings.rs
