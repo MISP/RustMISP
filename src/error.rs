@@ -186,7 +186,11 @@ mod tests {
     #[test]
     fn misp_result_type_alias() {
         let ok: MispResult<i32> = Ok(42);
-        assert_eq!(ok.unwrap(), 42);
+        assert!(ok.is_ok());
+        match ok {
+            Ok(v) => assert_eq!(v, 42),
+            Err(_) => panic!("expected Ok"),
+        }
 
         let err: MispResult<i32> = Err(MispError::NotFound("test".into()));
         assert!(err.is_err());

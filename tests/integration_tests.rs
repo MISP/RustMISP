@@ -60,7 +60,7 @@ fn now_ts() -> i64 {
 
 /// Create a simple event (mirrors PyMISP create_simple_event).
 fn simple_event() -> MispEvent {
-    let mut e = MispEvent::new(&unique("simple"));
+    let mut e = MispEvent::new(unique("simple"));
     e.distribution = Some(0); // your_organisation_only
     e.threat_level_id = Some(3); // low
     e.analysis = Some(2); // completed
@@ -561,7 +561,7 @@ async fn test_search_value() {
     // Create two events that share an attribute value (for search matching)
     let shared_value = format!("SHARED_{}", uuid::Uuid::new_v4());
 
-    let mut first = MispEvent::new(&unique("search_value_1"));
+    let mut first = MispEvent::new(unique("search_value_1"));
     first.distribution = Some(0);
     let first = client.add_event(&first).await.expect("add first");
     let first_id = first.id.unwrap();
@@ -571,7 +571,7 @@ async fn test_search_value() {
         .await
         .expect("add attr1");
 
-    let mut second = MispEvent::new(&unique("search_value_2"));
+    let mut second = MispEvent::new(unique("search_value_2"));
     second.distribution = Some(0);
     let second = client.add_event(&second).await.expect("add second");
     let second_id = second.id.unwrap();
@@ -604,7 +604,7 @@ async fn test_search_value() {
 
     // Non-existing value
     let params = SearchBuilder::new()
-        .value(&uuid::Uuid::new_v4().to_string())
+        .value(uuid::Uuid::new_v4().to_string())
         .build();
     let results = client
         .search(SearchController::Events, &params)
@@ -638,7 +638,7 @@ async fn test_search_type() {
     let unique_text = format!("rustmisp-text-{}", uuid::Uuid::new_v4());
 
     // Event with ip-dst
-    let mut ev1 = MispEvent::new(&unique("search_type_1"));
+    let mut ev1 = MispEvent::new(unique("search_type_1"));
     ev1.distribution = Some(0);
     let ev1 = client.add_event(&ev1).await.expect("add ev1");
     let ev1_id = ev1.id.unwrap();
@@ -646,7 +646,7 @@ async fn test_search_type() {
     client.add_attribute(ev1_id, &a1).await.expect("add ip-dst");
 
     // Event with ip-src
-    let mut ev2 = MispEvent::new(&unique("search_type_2"));
+    let mut ev2 = MispEvent::new(unique("search_type_2"));
     ev2.distribution = Some(0);
     let ev2 = client.add_event(&ev2).await.expect("add ev2");
     let ev2_id = ev2.id.unwrap();
@@ -654,7 +654,7 @@ async fn test_search_type() {
     client.add_attribute(ev2_id, &a2).await.expect("add ip-src");
 
     // Event with text only
-    let mut ev3 = MispEvent::new(&unique("search_type_3"));
+    let mut ev3 = MispEvent::new(unique("search_type_3"));
     ev3.distribution = Some(0);
     let ev3 = client.add_event(&ev3).await.expect("add ev3");
     let ev3_id = ev3.id.unwrap();
@@ -663,9 +663,11 @@ async fn test_search_type() {
 
     // Search by complex type query: ip-src OR ip-dst
     let type_query = build_complex_query(Some(vec!["ip-src", "ip-dst"]), None, None);
-    let mut params = SearchParameters::default();
-    params.timestamp = Some(Value::from(ts));
-    params.type_attribute = Some(type_query);
+    let params = SearchParameters {
+        timestamp: Some(Value::from(ts)),
+        type_attribute: Some(type_query),
+        ..Default::default()
+    };
     let results = client
         .search(SearchController::Events, &params)
         .await
@@ -704,7 +706,7 @@ async fn test_search_tag() {
         .expect("add tag_b");
 
     // Event 1: tagged with tag_a
-    let mut ev1 = MispEvent::new(&unique("search_tag_1"));
+    let mut ev1 = MispEvent::new(unique("search_tag_1"));
     ev1.distribution = Some(0);
     let ev1 = client.add_event(&ev1).await.expect("add ev1");
     let ev1_id = ev1.id.unwrap();
@@ -714,7 +716,7 @@ async fn test_search_tag() {
         .expect("tag ev1");
 
     // Event 2: tagged with tag_a AND tag_b
-    let mut ev2 = MispEvent::new(&unique("search_tag_2"));
+    let mut ev2 = MispEvent::new(unique("search_tag_2"));
     ev2.distribution = Some(0);
     let ev2 = client.add_event(&ev2).await.expect("add ev2");
     let ev2_id = ev2.id.unwrap();
@@ -728,15 +730,17 @@ async fn test_search_tag() {
         .expect("tag ev2 b");
 
     // Event 3: no tags
-    let mut ev3 = MispEvent::new(&unique("search_tag_3"));
+    let mut ev3 = MispEvent::new(unique("search_tag_3"));
     ev3.distribution = Some(0);
     let ev3 = client.add_event(&ev3).await.expect("add ev3");
     let ev3_id = ev3.id.unwrap();
 
     // Search by tag_a — should find ev1 and ev2
-    let mut params = SearchParameters::default();
-    params.timestamp = Some(Value::from(ts));
-    params.tags = Some(Value::String(tag_a.clone()));
+    let params = SearchParameters {
+        timestamp: Some(Value::from(ts)),
+        tags: Some(Value::String(tag_a.clone())),
+        ..Default::default()
+    };
     let results = client
         .search(SearchController::Events, &params)
         .await
@@ -747,7 +751,11 @@ async fn test_search_tag() {
     assert!(!ids.contains(&ev3_id), "tag_a should not match ev3");
 
     // Search by tag_b — only ev2
-    params.tags = Some(Value::String(tag_b.clone()));
+    let params = SearchParameters {
+        timestamp: Some(Value::from(ts)),
+        tags: Some(Value::String(tag_b.clone())),
+        ..Default::default()
+    };
     let results = client
         .search(SearchController::Events, &params)
         .await
@@ -758,7 +766,11 @@ async fn test_search_tag() {
 
     // Advanced: tag_a AND NOT tag_b — only ev1
     let complex = build_complex_query(Some(vec![tag_a.as_str()]), None, Some(vec![tag_b.as_str()]));
-    params.tags = Some(complex);
+    let params = SearchParameters {
+        timestamp: Some(Value::from(ts)),
+        tags: Some(complex),
+        ..Default::default()
+    };
     let results = client
         .search(SearchController::Events, &params)
         .await
@@ -808,9 +820,11 @@ async fn test_search_timestamp() {
     assert!(ids.contains(&event_id), "Should find event by id");
 
     // Search with timestamp filter
-    let mut params = SearchParameters::default();
-    params.timestamp = Some(Value::from(before));
-    params.event_id = Some(Value::from(event_id));
+    let params = SearchParameters {
+        timestamp: Some(Value::from(before)),
+        event_id: Some(Value::from(event_id)),
+        ..Default::default()
+    };
     let results = client
         .search(SearchController::Events, &params)
         .await
@@ -843,13 +857,15 @@ async fn test_search_publish_and_metadata() {
     let ev2_id = ev2.id.unwrap();
 
     // Add attribute to ev1 for metadata test
-    let a = MispAttribute::new("text", "Other", &uuid::Uuid::new_v4().to_string());
+    let a = MispAttribute::new("text", "Other", uuid::Uuid::new_v4().to_string());
     client.add_attribute(ev1_id, &a).await.expect("add attr");
 
     // Search with metadata=true — events should have no attributes
-    let mut params = SearchParameters::default();
-    params.event_id = Some(Value::from(ev1_id));
-    params.metadata = Some(true);
+    let params = SearchParameters {
+        event_id: Some(Value::from(ev1_id)),
+        metadata: Some(true),
+        ..Default::default()
+    };
     let results = client
         .search(SearchController::Events, &params)
         .await
@@ -861,16 +877,18 @@ async fn test_search_publish_and_metadata() {
                 .and_then(|e| e.get("Attribute"))
                 .and_then(|a| a.as_array());
             assert!(
-                attrs.map_or(true, |a| a.is_empty()),
+                attrs.is_none_or(|a| a.is_empty()),
                 "metadata=true should return no attributes"
             );
         }
     }
 
     // Search unpublished
-    let mut params = SearchParameters::default();
-    params.timestamp = Some(Value::from(ts));
-    params.published = Some(false);
+    let params = SearchParameters {
+        timestamp: Some(Value::from(ts)),
+        published: Some(false),
+        ..Default::default()
+    };
     let results = client
         .search(SearchController::Events, &params)
         .await
@@ -881,9 +899,11 @@ async fn test_search_publish_and_metadata() {
 
     // Publish ev1, then search published only
     client.publish(ev1_id, false).await.expect("publish");
-    let mut params = SearchParameters::default();
-    params.timestamp = Some(Value::from(ts));
-    params.published = Some(true);
+    let params = SearchParameters {
+        timestamp: Some(Value::from(ts)),
+        published: Some(true),
+        ..Default::default()
+    };
     let results = client
         .search(SearchController::Events, &params)
         .await
@@ -925,8 +945,10 @@ async fn test_search_index() {
     let ev_c_id = ev_c.id.unwrap();
 
     // search_index should return all 3
-    let mut params = SearchParameters::default();
-    params.timestamp = Some(Value::from(ts));
+    let params = SearchParameters {
+        timestamp: Some(Value::from(ts)),
+        ..Default::default()
+    };
     let results = client.search_index(&params).await.expect("search_index");
     let ids = event_ids_from_vec(&results);
     assert!(ids.contains(&ev_a_id));
@@ -934,10 +956,12 @@ async fn test_search_index() {
     assert!(ids.contains(&ev_c_id));
 
     // Pagination: page 1 with limit 2 should return at most 2
-    let mut params = SearchParameters::default();
-    params.timestamp = Some(Value::from(ts));
-    params.limit = Some(2);
-    params.page = Some(1);
+    let params = SearchParameters {
+        timestamp: Some(Value::from(ts)),
+        limit: Some(2),
+        page: Some(1),
+        ..Default::default()
+    };
     let page1 = client.search_index(&params).await.expect("page1");
     let ids1 = event_ids_from_vec(&page1);
     assert!(
@@ -964,7 +988,7 @@ async fn test_search_filters() {
     let client = create_client().await;
 
     // Event with ip-src (to_ids=true by default) and text (to_ids=false)
-    let mut ev = MispEvent::new(&unique("search_filters"));
+    let mut ev = MispEvent::new(unique("search_filters"));
     ev.distribution = Some(0);
     let ev = client.add_event(&ev).await.expect("add_event");
     let event_id = ev.id.unwrap();
@@ -1346,13 +1370,15 @@ async fn test_feed_operations() {
     let client = create_client().await;
 
     // --- CREATE ---
-    let mut feed = MispFeed::default();
-    feed.name = format!("RustMISP Test Feed {}", uuid::Uuid::new_v4());
-    feed.url = "https://example.com/feed".to_string();
-    feed.source_format = Some("freetext".to_string());
-    feed.provider = Some("RustMISP Test".to_string());
-    feed.distribution = Some(0);
-    feed.enabled = false;
+    let feed = MispFeed {
+        name: format!("RustMISP Test Feed {}", uuid::Uuid::new_v4()),
+        url: "https://example.com/feed".to_string(),
+        source_format: Some("freetext".to_string()),
+        provider: Some("RustMISP Test".to_string()),
+        distribution: Some(0),
+        enabled: false,
+        ..Default::default()
+    };
 
     let created = client.add_feed(&feed).await.expect("add_feed");
     assert_eq!(created.name, feed.name);
@@ -1371,7 +1397,7 @@ async fn test_feed_operations() {
     assert!(f.enabled, "Feed should be enabled");
 
     // Enable cache (may not exist in all MISP versions)
-    if let Ok(_) = client.enable_feed_cache(feed_id).await {
+    if client.enable_feed_cache(feed_id).await.is_ok() {
         let f = client
             .get_feed(feed_id)
             .await
