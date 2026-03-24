@@ -1,7 +1,9 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
 use super::organisation::MispOrganisation;
-use super::serde_helpers::{flexible_bool, flexible_bool_opt, string_or_i64_opt};
+use super::serde_helpers::{
+    flexible_bool, flexible_bool_opt, string_or_i64_opt, string_or_int_as_string_opt,
+};
 
 /// Deserialize password, treating masked values (all '*') as None like PyMISP.
 fn deserialize_password<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
@@ -135,15 +137,27 @@ pub struct MispUser {
     pub notification_monthly: Option<bool>,
 
     /// Timestamp of last login.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "string_or_int_as_string_opt",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub last_login: Option<String>,
 
     /// Date the user was created.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "string_or_int_as_string_opt",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub date_created: Option<String>,
 
     /// Date the user was last modified.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "string_or_int_as_string_opt",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub date_modified: Option<String>,
 
     /// Nested Organisation object (read-only, returned by server).

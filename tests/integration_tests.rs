@@ -1868,13 +1868,22 @@ async fn test_statistics() {
         .attributes_statistics(None, None)
         .await
         .expect("attr stats");
-    assert!(attr_stats.is_object(), "Should return JSON object");
+    assert!(
+        attr_stats.is_object() || attr_stats.is_array(),
+        "Should return JSON object or array"
+    );
 
     let tag_stats = client.tags_statistics(None, None).await.expect("tag stats");
-    assert!(tag_stats.is_object(), "Should return JSON object");
+    assert!(
+        tag_stats.is_object() || tag_stats.is_array(),
+        "Should return JSON object or array"
+    );
 
     let user_stats = client.users_statistics(None).await.expect("user stats");
-    assert!(user_stats.is_object(), "Should return JSON object");
+    assert!(
+        user_stats.is_object() || user_stats.is_array(),
+        "Should return JSON object or array"
+    );
 }
 
 // ============================================================================

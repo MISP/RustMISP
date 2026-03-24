@@ -44,6 +44,40 @@ pub mod string_or_i64_opt {
     }
 }
 
+/// Deserialize an `Option<String>` that may arrive as a string or integer.
+/// Handles: `null`, `"text"`, `123` (→ `"123"`), `""` (→ `None`).
+/// Useful for timestamp fields MISP returns as either strings or integers.
+pub mod string_or_int_as_string_opt {
+    use super::*;
+
+    pub fn serialize<S>(value: &Option<String>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match value {
+            Some(v) => serializer.serialize_str(v),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let opt: Option<serde_json::Value> = Option::deserialize(deserializer)?;
+        match opt {
+            None | Some(serde_json::Value::Null) => Ok(None),
+            Some(serde_json::Value::String(s)) if s.is_empty() => Ok(None),
+            Some(serde_json::Value::String(s)) => Ok(Some(s)),
+            Some(serde_json::Value::Number(n)) => Ok(Some(n.to_string())),
+            Some(serde_json::Value::Bool(b)) => Ok(Some(b.to_string())),
+            Some(other) => Err(serde::de::Error::custom(format!(
+                "expected string or number, got {other}"
+            ))),
+        }
+    }
+}
+
 /// Deserialize a value that may be a string or number into an `i64`.
 /// Handles: `"123"`, `123`.
 pub mod string_or_i64 {
