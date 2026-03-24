@@ -401,7 +401,7 @@ PHASE 6: TOOLS & POLISH
 [x]   - feed_operations.rs
 [x]   - user_management.rs
 [x]   - galaxy_operations.rs
-[ ]   - sightings.rs
+[x]   - sightings.rs
 [ ]   - sharing_groups.rs
 [ ] Complete rustdoc documentation for all public types and methods
 [ ] Write README.md with quickstart guide
