@@ -42,7 +42,7 @@ PHASE 1: FOUNDATION
 [x] Implement Analysis enum (with serde i32 repr)
 [x] Implement MispError enum (all 14 error variants)
 [x] Implement MispResult<T> type alias
-[ ] Copy describeTypes.json into data/
+[x] Copy describeTypes.json into data/
 [x] Unit tests: enum serialization round-trips
 [x] Unit tests: error type coverage
 [x] Verify: cargo build succeeds
