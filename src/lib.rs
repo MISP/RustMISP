@@ -1,6 +1,7 @@
 pub mod client;
 pub mod error;
 pub mod models;
+pub mod search;
 
 pub use client::{MispClient, MispClientBuilder, register_user};
 pub use error::{MispError, MispResult};
@@ -25,3 +26,7 @@ pub use models::taxonomy::MispTaxonomy;
 pub use models::user::{MispInbox, MispRole, MispUser};
 pub use models::user_setting::MispUserSetting;
 pub use models::warninglist::MispWarninglist;
+pub use search::{
+    ReturnFormat, SearchBuilder, SearchController, SearchParameters, build_complex_query,
+    parse_relative_timestamp,
+};

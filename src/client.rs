@@ -11,20 +11,20 @@ use crate::models::attribute::MispAttribute;
 use crate::models::correlation::{MispCorrelationExclusion, MispDecayingModel};
 use crate::models::event::MispEvent;
 use crate::models::event_report::MispEventReport;
+use crate::models::feed::MispFeed;
 use crate::models::galaxy::{MispGalaxy, MispGalaxyCluster, MispGalaxyClusterRelation};
 use crate::models::noticelist::MispNoticelist;
 use crate::models::object::{MispObject, MispObjectReference, MispObjectTemplate};
 use crate::models::organisation::MispOrganisation;
+use crate::models::server::MispServer;
 use crate::models::shadow_attribute::MispShadowAttribute;
+use crate::models::sharing_group::MispSharingGroup;
 use crate::models::sighting::MispSighting;
 use crate::models::tag::MispTag;
 use crate::models::taxonomy::MispTaxonomy;
 use crate::models::user::{MispInbox, MispRole, MispUser};
 use crate::models::user_setting::MispUserSetting;
 use crate::models::warninglist::MispWarninglist;
-use crate::models::feed::MispFeed;
-use crate::models::server::MispServer;
-use crate::models::sharing_group::MispSharingGroup;
 
 /// Async client for the MISP REST API.
 ///
@@ -1959,11 +1959,8 @@ impl MispClient {
 
     /// Stop a specific worker by PID.
     pub async fn stop_worker_by_pid(&self, pid: i64) -> MispResult<Value> {
-        self.post(
-            &format!("servers/stopWorker/{pid}"),
-            &serde_json::json!({}),
-        )
-        .await
+        self.post(&format!("servers/stopWorker/{pid}"), &serde_json::json!({}))
+            .await
     }
 
     /// Kill all background workers.
@@ -2136,10 +2133,7 @@ impl MispClient {
     }
 
     /// Add a new sharing group.
-    pub async fn add_sharing_group(
-        &self,
-        sg: &MispSharingGroup,
-    ) -> MispResult<MispSharingGroup> {
+    pub async fn add_sharing_group(&self, sg: &MispSharingGroup) -> MispResult<MispSharingGroup> {
         let body = serde_json::json!({"SharingGroup": sg});
         let json = self.post("sharingGroups/add", &body).await?;
         let val = if json.get("SharingGroup").is_some() {
@@ -2155,9 +2149,7 @@ impl MispClient {
         &self,
         sg: &MispSharingGroup,
     ) -> MispResult<MispSharingGroup> {
-        let id = sg
-            .id
-            .ok_or_else(|| MispError::MissingField("id".into()))?;
+        let id = sg.id.ok_or_else(|| MispError::MissingField("id".into()))?;
         let body = serde_json::json!({"SharingGroup": sg});
         let json = self
             .post(&format!("sharingGroups/edit/{id}"), &body)
@@ -2185,11 +2177,7 @@ impl MispClient {
     }
 
     /// Add an organisation to a sharing group.
-    pub async fn add_org_to_sharing_group(
-        &self,
-        sg_id: i64,
-        org_id: i64,
-    ) -> MispResult<Value> {
+    pub async fn add_org_to_sharing_group(&self, sg_id: i64, org_id: i64) -> MispResult<Value> {
         self.post(
             &format!("sharingGroups/addOrg/{sg_id}/{org_id}"),
             &serde_json::json!({}),
@@ -2303,6 +2291,202 @@ impl MispClient {
         };
         self.post(&path, &serde_json::json!({})).await
     }
+
+    // ----------------------------------------------------------------
+    // Search (Iteration 10)
+    // ----------------------------------------------------------------
+
+    /// Search MISP using the REST search API.
+    ///
+    /// Supports searching events, attributes, or objects with 50+ optional
+    /// parameters. Use [`SearchBuilder`] for ergonomic query construction.
+    ///
+    /// # Arguments
+    /// * `controller` - Which controller to search against (events, attributes, objects)
+    /// * `params` - Search parameters built via [`SearchBuilder`] or [`SearchParameters`]
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use rustmisp::{MispClient, SearchBuilder, SearchController, ReturnFormat};
+    /// # async fn example() -> rustmisp::MispResult<()> {
+    /// let client = MispClient::new("https://misp.example.com", "key", false)?;
+    /// let params = SearchBuilder::new()
+    ///     .value("malware.exe")
+    ///     .type_attribute("filename")
+    ///     .return_format(ReturnFormat::Json)
+    ///     .build();
+    /// let results = client.search(SearchController::Events, &params).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn search(
+        &self,
+        controller: crate::search::SearchController,
+        params: &crate::search::SearchParameters,
+    ) -> MispResult<Value> {
+        let body = params.to_json();
+        self.post(controller.rest_search_path(), &body).await
+    }
+
+    /// Search the event index with filter parameters.
+    ///
+    /// This is a lighter-weight search that returns event metadata
+    /// without full attribute/object details.
+    pub async fn search_index(
+        &self,
+        params: &crate::search::SearchParameters,
+    ) -> MispResult<Vec<MispEvent>> {
+        let body = params.to_json();
+        let json = self.post("events/index", &body).await?;
+        let arr = json
+            .as_array()
+            .ok_or_else(|| MispError::UnexpectedResponse("expected array".into()))?;
+        let mut events = Vec::with_capacity(arr.len());
+        for item in arr {
+            let event_val = if item.get("Event").is_some() {
+                &item["Event"]
+            } else {
+                item
+            };
+            let event: MispEvent = serde_json::from_value(event_val.clone())?;
+            events.push(event);
+        }
+        Ok(events)
+    }
+
+    /// Search sightings with various filter parameters.
+    ///
+    /// # Arguments
+    /// * `context` - Search context: "attribute" or "event"
+    /// * `id` - ID of the entity to search sightings for
+    /// * `source` - Optional source filter
+    /// * `type_sighting` - Optional sighting type (0=sighting, 1=false positive, 2=expiration)
+    /// * `date_from` - Optional start date
+    /// * `date_to` - Optional end date
+    /// * `publish_timestamp` - Optional publish timestamp filter
+    /// * `last` - Optional relative timestamp (e.g. "5d")
+    /// * `org` - Optional organisation filter
+    #[allow(clippy::too_many_arguments)]
+    pub async fn search_sightings(
+        &self,
+        context: &str,
+        id: i64,
+        source: Option<&str>,
+        type_sighting: Option<i64>,
+        date_from: Option<&str>,
+        date_to: Option<&str>,
+        publish_timestamp: Option<&str>,
+        last: Option<&str>,
+        org: Option<&str>,
+    ) -> MispResult<Value> {
+        let mut body = serde_json::Map::new();
+        body.insert("id".into(), serde_json::json!(id));
+        if let Some(s) = source {
+            body.insert("source".into(), serde_json::json!(s));
+        }
+        if let Some(t) = type_sighting {
+            body.insert("type".into(), serde_json::json!(t));
+        }
+        if let Some(df) = date_from {
+            body.insert("from".into(), serde_json::json!(df));
+        }
+        if let Some(dt) = date_to {
+            body.insert("to".into(), serde_json::json!(dt));
+        }
+        if let Some(pt) = publish_timestamp {
+            body.insert("last".into(), serde_json::json!(pt));
+        }
+        if let Some(l) = last {
+            body.insert("last".into(), serde_json::json!(l));
+        }
+        if let Some(o) = org {
+            body.insert("org".into(), serde_json::json!(o));
+        }
+        let path = format!("sightings/restSearch/{context}/{id}");
+        self.post(&path, &Value::Object(body)).await
+    }
+
+    /// Search admin logs with various filter parameters.
+    ///
+    /// # Arguments
+    /// * `limit` - Maximum number of results
+    /// * `page` - Page number for pagination
+    /// * `log_id` - Optional specific log ID
+    /// * `title` - Optional title filter
+    /// * `created` - Optional creation date filter
+    /// * `model` - Optional model name filter (e.g. "Event", "Attribute")
+    /// * `action` - Optional action filter (e.g. "add", "edit", "delete")
+    /// * `user_id` - Optional user ID filter
+    /// * `change` - Optional change content filter
+    /// * `email` - Optional email filter
+    /// * `org` - Optional organisation filter
+    /// * `description` - Optional description filter
+    /// * `ip` - Optional IP address filter
+    #[allow(clippy::too_many_arguments)]
+    pub async fn search_logs(
+        &self,
+        limit: Option<i64>,
+        page: Option<i64>,
+        log_id: Option<i64>,
+        title: Option<&str>,
+        created: Option<&str>,
+        model: Option<&str>,
+        action: Option<&str>,
+        user_id: Option<i64>,
+        change: Option<&str>,
+        email: Option<&str>,
+        org: Option<&str>,
+        description: Option<&str>,
+        ip: Option<&str>,
+    ) -> MispResult<Value> {
+        let mut body = serde_json::Map::new();
+        if let Some(l) = limit {
+            body.insert("limit".into(), serde_json::json!(l));
+        }
+        if let Some(p) = page {
+            body.insert("page".into(), serde_json::json!(p));
+        }
+        if let Some(id) = log_id {
+            body.insert("id".into(), serde_json::json!(id));
+        }
+        if let Some(t) = title {
+            body.insert("title".into(), serde_json::json!(t));
+        }
+        if let Some(c) = created {
+            body.insert("created".into(), serde_json::json!(c));
+        }
+        if let Some(m) = model {
+            body.insert("model".into(), serde_json::json!(m));
+        }
+        if let Some(a) = action {
+            body.insert("action".into(), serde_json::json!(a));
+        }
+        if let Some(u) = user_id {
+            body.insert("user_id".into(), serde_json::json!(u));
+        }
+        if let Some(ch) = change {
+            body.insert("change".into(), serde_json::json!(ch));
+        }
+        if let Some(e) = email {
+            body.insert("email".into(), serde_json::json!(e));
+        }
+        if let Some(o) = org {
+            body.insert("org".into(), serde_json::json!(o));
+        }
+        if let Some(d) = description {
+            body.insert("description".into(), serde_json::json!(d));
+        }
+        if let Some(i) = ip {
+            body.insert("ip".into(), serde_json::json!(i));
+        }
+        self.post("admin/logs/index", &Value::Object(body)).await
+    }
+
+    /// Search feed caches for a specific value.
+    pub async fn search_feeds(&self, value: &str) -> MispResult<Value> {
+        let body = serde_json::json!({"value": value});
+        self.post("feeds/searchCaches", &body).await
+    }
 }
 
 /// Ensure the URL has a trailing slash so `Url::join` works correctly.
@@ -2386,11 +2570,7 @@ pub async fn register_user(
         })
         .build()?;
 
-    let response = client
-        .post(url)
-        .json(&Value::Object(body))
-        .send()
-        .await?;
+    let response = client.post(url).json(&Value::Object(body)).send().await?;
 
     let status = response.status();
     let text = response.text().await?;
@@ -5207,8 +5387,7 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/users/register"))
             .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_json(serde_json::json!({"message": "OK"})),
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"message": "OK"})),
             )
             .mount(&server)
             .await;
@@ -5557,7 +5736,10 @@ mod tests {
             .await;
 
         let val = serde_json::json!({"widgets": ["timeline"]});
-        let r = client.set_user_setting("dashboard", &val, None).await.unwrap();
+        let r = client
+            .set_user_setting("dashboard", &val, None)
+            .await
+            .unwrap();
         assert_eq!(r["message"], "Setting saved.");
     }
 

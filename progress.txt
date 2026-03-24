@@ -305,19 +305,19 @@ PHASE 5: SEARCH & ADVANCED
 ================================================================================
 
 --- Iteration 10: Search Engine ---
-[ ] Implement SearchParameters struct (50+ optional fields)
-[ ] Implement SearchBuilder with fluent API
-[ ] Implement search(controller, params) - POST /events/restSearch, /attributes/restSearch, /objects/restSearch
-[ ] Implement search_index(params) - POST /events/index
-[ ] Implement search_sightings(context, ...) - POST /sightings/restSearch/event/{id}
-[ ] Implement search_logs(limit, page, ...) - POST /admin/logs/index
-[ ] Implement search_feeds(value) - POST /feeds/searchCaches
-[ ] Implement build_complex_query(or, and, not) - returns nested dict
-[ ] Support return_format variants: json, xml, csv, text, stix, stix2, suricata, snort, yara, rpz, openioc
-[ ] Support relative timestamp parsing ("5d", "12h", "30m")
-[ ] Unit tests: SearchBuilder produces correct JSON
-[ ] Unit tests: complex query building
-[ ] Unit tests: timestamp parsing
+[x] Implement SearchParameters struct (50+ optional fields)
+[x] Implement SearchBuilder with fluent API
+[x] Implement search(controller, params) - POST /events/restSearch, /attributes/restSearch, /objects/restSearch
+[x] Implement search_index(params) - POST /events/index
+[x] Implement search_sightings(context, ...) - POST /sightings/restSearch/event/{id}
+[x] Implement search_logs(limit, page, ...) - POST /admin/logs/index
+[x] Implement search_feeds(value) - POST /feeds/searchCaches
+[x] Implement build_complex_query(or, and, not) - returns nested dict
+[x] Support return_format variants: json, xml, csv, text, stix, stix2, suricata, snort, yara, rpz, openioc
+[x] Support relative timestamp parsing ("5d", "12h", "30m")
+[x] Unit tests: SearchBuilder produces correct JSON
+[x] Unit tests: complex query building
+[x] Unit tests: timestamp parsing
 
 --- Iteration 11: Advanced Features ---
 [ ] Implement freetext(event_id, string, ...) - POST /attributes/freeTextImport/{event_id}
