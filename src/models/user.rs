@@ -1,7 +1,19 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use super::organisation::MispOrganisation;
 use super::serde_helpers::{flexible_bool, flexible_bool_opt, string_or_i64_opt};
+
+/// Deserialize password, treating masked values (all '*') as None like PyMISP.
+fn deserialize_password<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt: Option<String> = Option::deserialize(deserializer)?;
+    match opt {
+        Some(ref s) if !s.is_empty() && s.chars().all(|c| c == '*') => Ok(None),
+        other => Ok(other),
+    }
+}
 
 /// A MISP user account.
 ///
@@ -78,7 +90,12 @@ pub struct MispUser {
     pub disabled: bool,
 
     /// Password (only used when creating/updating, never returned by server).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Masked passwords (all '*') are deserialized as None, matching PyMISP.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_password"
+    )]
     pub password: Option<String>,
 
     /// Whether to change the password on next login.

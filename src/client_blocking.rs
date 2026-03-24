@@ -822,13 +822,27 @@ impl MispClientBlocking {
     /// Attach a galaxy cluster to an entity.
     pub fn attach_galaxy_cluster(
         &self,
-        entity_uuid: &str,
-        cluster_uuid: &str,
+        target_id: &str,
+        cluster_id: &str,
         local: bool,
     ) -> MispResult<Value> {
         self.rt.block_on(
             self.inner
-                .attach_galaxy_cluster(entity_uuid, cluster_uuid, local),
+                .attach_galaxy_cluster(target_id, cluster_id, local),
+        )
+    }
+
+    /// Attach a galaxy cluster to any entity type (event, attribute, etc.).
+    pub fn attach_galaxy_cluster_to(
+        &self,
+        target_id: &str,
+        cluster_id: &str,
+        target_type: &str,
+        local: bool,
+    ) -> MispResult<Value> {
+        self.rt.block_on(
+            self.inner
+                .attach_galaxy_cluster_to(target_id, cluster_id, target_type, local),
         )
     }
 

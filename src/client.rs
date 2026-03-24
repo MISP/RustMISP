@@ -357,7 +357,12 @@ impl MispClient {
         let id = event
             .id
             .ok_or_else(|| MispError::MissingField("id".into()))?;
-        let body = serde_json::json!({ "Event": serde_json::to_value(event)? });
+        // Strip timestamp so MISP accepts the update (like PyMISP's edited-object behavior)
+        let mut val = serde_json::to_value(event)?;
+        if let Some(obj) = val.as_object_mut() {
+            obj.remove("timestamp");
+        }
+        let body = serde_json::json!({ "Event": val });
         let json = self.post(&format!("events/edit/{id}"), &body).await?;
         let event_val = if json.get("Event").is_some() {
             &json["Event"]
@@ -464,7 +469,11 @@ impl MispClient {
         let id = attr
             .id
             .ok_or_else(|| MispError::MissingField("id".into()))?;
-        let body = serde_json::to_value(attr)?;
+        // Strip timestamp so MISP accepts the update (like PyMISP's edited-object behavior)
+        let mut body = serde_json::to_value(attr)?;
+        if let Some(obj) = body.as_object_mut() {
+            obj.remove("timestamp");
+        }
         let json = self.post(&format!("attributes/edit/{id}"), &body).await?;
         let attr_val = if json.get("Attribute").is_some() {
             &json["Attribute"]
@@ -657,7 +666,12 @@ impl MispClient {
         let id = object
             .id
             .ok_or_else(|| MispError::MissingField("id".into()))?;
-        let body = serde_json::json!({ "Object": serde_json::to_value(object)? });
+        // Strip timestamp so MISP accepts the update (like PyMISP's edited-object behavior)
+        let mut val = serde_json::to_value(object)?;
+        if let Some(obj) = val.as_object_mut() {
+            obj.remove("timestamp");
+        }
+        let body = serde_json::json!({ "Object": val });
         let json = self.post(&format!("objects/edit/{id}"), &body).await?;
         let obj_val = if json.get("Object").is_some() {
             &json["Object"]
@@ -848,7 +862,9 @@ impl MispClient {
 
     /// List sightings for an attribute or event.
     pub async fn sightings(&self, id: i64) -> MispResult<Vec<MispSighting>> {
-        let json = self.get(&format!("sightings/index/{id}")).await?;
+        // PyMISP uses POST sightings/listSightings with context and id
+        let body = serde_json::json!({"context": "attribute", "id": id});
+        let json = self.post("sightings/listSightings", &body).await?;
         let arr = json
             .as_array()
             .ok_or_else(|| MispError::UnexpectedResponse("expected array".into()))?;
@@ -1594,13 +1610,30 @@ impl MispClient {
     /// Attach a galaxy cluster to an entity (event, attribute, etc.) by UUID.
     pub async fn attach_galaxy_cluster(
         &self,
-        entity_uuid: &str,
-        cluster_uuid: &str,
+        target_id: &str,
+        cluster_id: &str,
         local: bool,
     ) -> MispResult<Value> {
+        self.attach_galaxy_cluster_to(target_id, cluster_id, "event", local)
+            .await
+    }
+
+    /// Attach a galaxy cluster to any entity type (event, attribute, etc.).
+    ///
+    /// `target_type` should be `"event"` or `"attribute"` (matching PyMISP's
+    /// `attach_target_type`).
+    pub async fn attach_galaxy_cluster_to(
+        &self,
+        target_id: &str,
+        cluster_id: &str,
+        target_type: &str,
+        local: bool,
+    ) -> MispResult<Value> {
+        let local_flag = if local { 1 } else { 0 };
+        let body = serde_json::json!({"Galaxy": {"target_id": cluster_id}});
         self.post(
-            &format!("galaxies/attachCluster/{entity_uuid}/{cluster_uuid}"),
-            &serde_json::json!({"local": if local { 1 } else { 0 }}),
+            &format!("galaxies/attachCluster/{target_id}/{target_type}/local:{local_flag}"),
+            &body,
         )
         .await
     }
@@ -1892,7 +1925,17 @@ impl MispClient {
         let id = user
             .id
             .ok_or_else(|| MispError::MissingField("id".into()))?;
-        let body = serde_json::json!({"User": user});
+        // Strip password if it's None or masked (all '*') to avoid triggering
+        // password validation on update (matching PyMISP behavior)
+        let mut user_val = serde_json::to_value(user)?;
+        if let Some(obj) = user_val.as_object_mut() {
+            if let Some(pw) = obj.get("password").and_then(|v| v.as_str()) {
+                if pw.chars().all(|c| c == '*') || pw.is_empty() {
+                    obj.remove("password");
+                }
+            }
+        }
+        let body = serde_json::json!({"User": user_val});
         let json = self.post(&format!("admin/users/edit/{id}"), &body).await?;
         let val = if json.get("User").is_some() {
             &json["User"]
@@ -2316,7 +2359,13 @@ impl MispClient {
     /// List all sharing groups.
     pub async fn sharing_groups(&self) -> MispResult<Vec<MispSharingGroup>> {
         let json = self.get("sharingGroups/index").await?;
-        let arr = json
+        // MISP wraps sharing groups in {"response": [...]}
+        let arr_value = if let Some(resp) = json.get("response") {
+            resp
+        } else {
+            &json
+        };
+        let arr = arr_value
             .as_array()
             .ok_or_else(|| MispError::UnexpectedResponse("expected array".into()))?;
         let mut groups = Vec::with_capacity(arr.len());
@@ -2361,7 +2410,12 @@ impl MispClient {
         sg: &MispSharingGroup,
     ) -> MispResult<MispSharingGroup> {
         let id = sg.id.ok_or_else(|| MispError::MissingField("id".into()))?;
-        let body = serde_json::json!({"SharingGroup": sg});
+        // Strip `modified` before sending — workaround for MISP bug.
+        // See: https://github.com/MISP/PyMISP/issues/1049
+        let mut body = serde_json::json!({"SharingGroup": sg});
+        if let Some(obj) = body.get_mut("SharingGroup").and_then(|v| v.as_object_mut()) {
+            obj.remove("modified");
+        }
         let json = self
             .post(&format!("sharingGroups/edit/{id}"), &body)
             .await?;
@@ -4154,8 +4208,8 @@ mod tests {
         let server = MockServer::start().await;
         let client = MispClient::new(server.uri(), "key", false).unwrap();
 
-        Mock::given(method("GET"))
-            .and(path("/sightings/index/7"))
+        Mock::given(method("POST"))
+            .and(path("/sightings/listSightings"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
                 {
                     "Sighting": {
@@ -5237,8 +5291,10 @@ mod tests {
         let client = MispClient::new(server.uri(), "key", false).unwrap();
 
         Mock::given(method("POST"))
-            .and(path("/galaxies/attachCluster/event-uuid/cluster-uuid"))
-            .and(body_partial_json(serde_json::json!({"local": 1})))
+            .and(path("/galaxies/attachCluster/42/event/local:1"))
+            .and(body_partial_json(
+                serde_json::json!({"Galaxy": {"target_id": "99"}}),
+            ))
             .respond_with(
                 ResponseTemplate::new(200).set_body_json(
                     serde_json::json!({"saved": true, "success": "Cluster attached."}),
@@ -5248,7 +5304,7 @@ mod tests {
             .await;
 
         let result = client
-            .attach_galaxy_cluster("event-uuid", "cluster-uuid", true)
+            .attach_galaxy_cluster("42", "99", true)
             .await
             .unwrap();
         assert_eq!(result["saved"], true);

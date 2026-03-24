@@ -15,6 +15,32 @@ RustMISP is maintained as a **standalone Git repository** (e.g., `github.com/MIS
 - **Idiomatic Rust** — Result-based error handling, builder patterns, enums for fixed sets
 - **Reuse PyMISP's existing Python test suite** for integration testing against a live MISP instance
 
+### Reference Implementation: PyMISP
+
+**PyMISP is the definitive reference implementation.** When in doubt about how
+to call a MISP endpoint, which fields to send or omit, or how to handle an
+inconsistent API response, consult
+[PyMISP's source](https://github.com/MISP/PyMISP) — specifically `pymisp/api.py`
+and `pymisp/abstract.py`. The MISP REST API has many undocumented quirks (fields
+that change type depending on context, endpoints that silently ignore updates
+when certain fields are present, etc.). PyMISP has accumulated years of
+workarounds for these, and RustMISP must replicate them rather than assuming the
+API behaves as its OpenAPI spec suggests.
+
+Key patterns to observe in PyMISP:
+
+- **`_int_to_str()`** — PyMISP converts all integer values to strings before
+  sending. MISP's CakePHP backend expects string-encoded IDs in many contexts.
+- **`to_dict()` strips `timestamp`** when the object has been edited, letting
+  MISP assign a fresh timestamp.
+- **`to_dict()` skips `None` values and empty lists** — equivalent to Rust's
+  `#[serde(skip_serializing_if = "Option::is_none")]`.
+- **Explicit field stripping** — Some update methods pop fields before sending
+  (e.g., `update_sharing_group` strips `modified`; see below).
+- **Dynamic typing resilience** — Python's dynamic types silently absorb MISP
+  returning `false` where a string was expected. In Rust, we need custom
+  deserializers for these cases.
+
 ---
 
 ## 2. Repository & Integration
@@ -631,20 +657,80 @@ pub type MispResult<T> = Result<T, MispError>;
 
 ---
 
-## 8. Testing Strategy
+## 8. Known MISP API Quirks & Workarounds
 
-### 8.1 Rust Unit Tests (`tests/unit/`)
+The MISP REST API has several undocumented behaviours that cause issues for a
+strongly-typed client. Each workaround below was discovered by comparing against
+PyMISP's handling of the same endpoint.
+
+### 8.1 Feed `rules` field returns `false` instead of `null`
+
+When a feed update request includes fields that MISP does not recognise (or
+misinterprets), the API response may return `"rules": false` (a JSON boolean)
+instead of `"rules": null` or a JSON string. The `rules` field is typed as
+`Option<String>` in the model.
+
+**Workaround:** Use a custom serde deserializer (`deserialize_string_or_false`)
+that maps `false`, `null`, and empty string to `None`. The same deserializer is
+reused for `headers` and `cache_timestamp`, which exhibit the same behaviour.
+
+**PyMISP equivalent:** Python's dynamic typing absorbs this silently — `False`
+is stored as-is and no error is raised.
+
+### 8.2 Do not invent fields that MISP does not define
+
+The original `MispFeed` model included a `pull_rules: bool` field. This field
+does not exist in the MISP schema. When sent to the API, MISP silently echoed
+it back and — as a side effect — corrupted the `rules` field in its response
+(setting it to `false`).
+
+**Rule:** Only include fields that exist in PyMISP's corresponding class
+(`MISPFeed`, `MISPSharingGroup`, etc.) or are returned by the MISP API. When
+adding a field, verify it exists in at least one of:
+1. PyMISP's model class
+2. MISP's OpenAPI spec
+3. Actual API responses (tested via `curl`)
+
+### 8.3 Sharing group `modified` must be stripped before update
+
+Sending the `modified` timestamp back to `sharingGroups/edit/{id}` causes the
+update to be silently ignored — the API returns `200 OK` with the **old** data.
+
+**Workaround:** Strip `modified` from the request body before sending, matching
+PyMISP's explicit `sharing_group.pop('modified', None)`.
+
+**Reference:** https://github.com/MISP/PyMISP/issues/1049
+
+### 8.4 General principles
+
+1. **When an update is silently ignored**, check whether sending back read-only
+   or server-managed fields (timestamps, UUIDs, nested objects) is causing the
+   issue. Try sending only the changed fields.
+2. **When deserialization fails**, MISP likely returned a different type than
+   expected (e.g., `false` for a string, `"0"` for an integer). Add a flexible
+   deserializer rather than changing the field's Rust type.
+3. **Always check PyMISP first** — if PyMISP has a `# FIXME`, `# Quick fix`,
+   or field `.pop()` for an endpoint, RustMISP needs the same workaround.
+
+---
+
+## 9. Testing Strategy
+
+### 9.1 Rust Unit Tests (`tests/unit/`)
 - Model serialization/deserialization round-trips
 - Search parameter building
 - Attribute type/category validation against `describeTypes.json`
 - Error type coverage
 
-### 8.2 Rust Integration Tests (`tests/integration/`)
+### 9.2 Rust Integration Tests (`tests/integration/`)
 - Full CRUD cycles against a live MISP instance
-- Environment variables: `MISP_URL`, `MISP_KEY`
-- Mirrors the structure of `testlive_comprehensive.py`
+- Environment variables: `MISP_URL`, `MISP_KEY`, `MISP_VERIFYCERT`
+- **Must mirror the behaviour of `testlive_comprehensive.py`** — when a Rust
+  integration test performs the same operation as a PyMISP test, it must produce
+  equivalent results. If a test fails, the first step is to check how PyMISP
+  handles the same endpoint.
 
-### 8.3 Python Test Suite (`tests/python/`)
+### 9.3 Python Test Suite (`tests/python/`)
 Copied verbatim from the [PyMISP repository](https://github.com/MISP/PyMISP) (`tests/` directory):
 - `test_mispevent.py` — Core data model tests
 - `test_analyst_data.py` — Notes/opinions/relationships
@@ -656,13 +742,18 @@ Copied verbatim from the [PyMISP repository](https://github.com/MISP/PyMISP) (`t
 - `testlive_local.py` — Local instance integration (73KB)
 - `testlive_sync.py` — Server synchronization tests
 
-These remain Python tests and test PyMISP. They serve as the **reference behavior specification** — RustMISP's Rust integration tests must produce equivalent results for the same operations.
+These remain Python tests and test PyMISP. They serve as the **authoritative
+behavior specification** — RustMISP's Rust integration tests must produce
+equivalent results for the same operations. When debugging a failing Rust test,
+always consult the corresponding PyMISP test and the PyMISP client code
+(`pymisp/api.py`) to understand how the reference implementation handles the
+same endpoint.
 
 All associated test data files (JSON, CSV, email samples, STIX files) are also copied.
 
 ---
 
-## 9. Tools (Feature-Gated)
+## 10. Tools (Feature-Gated)
 
 Optional tool modules behind cargo features, matching PyMISP's `tools/`:
 
@@ -679,7 +770,7 @@ Optional tool modules behind cargo features, matching PyMISP's `tools/`:
 
 ---
 
-## 10. Examples
+## 11. Examples
 
 Provide idiomatic Rust examples matching PyMISP's `examples/` directory:
 
@@ -694,7 +785,7 @@ Provide idiomatic Rust examples matching PyMISP's `examples/` directory:
 
 ---
 
-## 11. Implementation Phases
+## 12. Implementation Phases
 
 ### Phase 0: Repository Setup (Iteration 0)
 - Create standalone GitHub repository (`github.com/MISP/RustMISP`)
@@ -767,7 +858,7 @@ Provide idiomatic Rust examples matching PyMISP's `examples/` directory:
 
 ---
 
-## 12. Non-Goals (Explicitly Out of Scope)
+## 13. Non-Goals (Explicitly Out of Scope)
 
 - **GUI or CLI tool** — RustMISP is a library only
 - **Database access** — API-only, no direct MySQL/Redis
@@ -781,7 +872,7 @@ Provide idiomatic Rust examples matching PyMISP's `examples/` directory:
 
 ---
 
-## 13. Success Criteria
+## 14. Success Criteria
 
 1. All 243 PyMISP API methods have Rust equivalents
 2. All 30+ data models serialize/deserialize correctly with MISP's JSON format

@@ -1,6 +1,20 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use super::serde_helpers::{flexible_bool, string_or_i64_opt};
+
+/// Deserialize a field where MISP may return `false` instead of `null` or a string.
+/// Handles: string, number (as string), false → None, null → None.
+fn deserialize_string_or_false<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let val: serde_json::Value = serde_json::Value::deserialize(deserializer)?;
+    match val {
+        serde_json::Value::String(s) if !s.is_empty() => Ok(Some(s)),
+        serde_json::Value::Number(n) => Ok(Some(n.to_string())),
+        _ => Ok(None), // false, null, empty string
+    }
+}
 
 /// A MISP feed — an external or internal source of threat intelligence data.
 ///
@@ -29,7 +43,12 @@ pub struct MispFeed {
     pub url: String,
 
     /// Feed rules as JSON string (filtering rules).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// MISP may return `false` instead of `null` when no rules are set.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_string_or_false"
+    )]
     pub rules: Option<String>,
 
     /// Whether this feed is enabled.
@@ -64,17 +83,13 @@ pub struct MispFeed {
     #[serde(default, with = "flexible_bool")]
     pub default_tag: bool,
 
-    /// Whether to pull from this feed automatically.
-    #[serde(default, with = "flexible_bool")]
-    pub pull_rules: bool,
-
     /// Source format: "misp", "freetext", "csv".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_format: Option<String>,
 
-    /// Fixed event UUID — if set, all attributes go into one event.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub fixed_event: Option<String>,
+    /// Whether all attributes go into a single fixed event.
+    #[serde(default, with = "flexible_bool")]
+    pub fixed_event: bool,
 
     /// Whether to delta-merge (only add new attributes, don't duplicate).
     #[serde(default, with = "flexible_bool")]
@@ -97,7 +112,12 @@ pub struct MispFeed {
     pub override_ids: bool,
 
     /// Custom HTTP headers as JSON string.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// MISP may return `false` instead of `null` when no headers are set.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_string_or_false"
+    )]
     pub headers: Option<String>,
 
     /// Whether caching is enabled for this feed.
@@ -127,6 +147,35 @@ pub struct MispFeed {
     /// Whether to look up existing attributes before creating new ones.
     #[serde(default, with = "flexible_bool")]
     pub lookup_visible: bool,
+
+    /// Feed settings as JSON string.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<String>,
+
+    /// Whether this is a default feed.
+    #[serde(default, rename = "default", with = "flexible_bool")]
+    pub is_default: bool,
+
+    /// Whether to lock events created from this feed.
+    #[serde(default, with = "flexible_bool")]
+    pub lock_events: bool,
+
+    /// Timestamp when feed cache was last built.
+    /// MISP returns `false` when not cached, or a string timestamp when cached.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_string_or_false"
+    )]
+    pub cache_timestamp: Option<String>,
+
+    /// Tag collection ID associated with this feed.
+    #[serde(
+        default,
+        with = "string_or_i64_opt",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub tag_collection_id: Option<i64>,
 }
 
 impl MispFeed {
@@ -143,9 +192,8 @@ impl MispFeed {
             sharing_group_id: None,
             tag_id: None,
             default_tag: false,
-            pull_rules: false,
             source_format: None,
-            fixed_event: None,
+            fixed_event: false,
             delta_merge: false,
             event_id: None,
             publish: false,
@@ -157,6 +205,11 @@ impl MispFeed {
             input_source: None,
             delete_local_file: false,
             lookup_visible: false,
+            settings: None,
+            is_default: false,
+            lock_events: false,
+            cache_timestamp: None,
+            tag_collection_id: None,
         }
     }
 }
@@ -193,9 +246,8 @@ mod tests {
             sharing_group_id: None,
             tag_id: Some(10),
             default_tag: true,
-            pull_rules: false,
             source_format: Some("misp".into()),
-            fixed_event: None,
+            fixed_event: false,
             delta_merge: true,
             event_id: None,
             publish: true,
@@ -207,6 +259,11 @@ mod tests {
             input_source: Some("network".into()),
             delete_local_file: false,
             lookup_visible: true,
+            settings: None,
+            is_default: false,
+            lock_events: false,
+            cache_timestamp: None,
+            tag_collection_id: None,
         };
         let json = serde_json::to_string(&f).unwrap();
         let back: MispFeed = serde_json::from_str(&json).unwrap();

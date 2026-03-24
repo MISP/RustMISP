@@ -128,7 +128,13 @@ impl MispObject {
     }
 
     /// Add an attribute to this object.
-    pub fn add_attribute(&mut self, attr: MispAttribute) {
+    ///
+    /// If `object_relation` is not set on the attribute, it defaults to
+    /// the attribute's type (matching PyMISP's behavior).
+    pub fn add_attribute(&mut self, mut attr: MispAttribute) {
+        if attr.object_relation.is_none() {
+            attr.object_relation = Some(attr.attr_type.clone());
+        }
         self.attributes.push(attr);
     }
 
