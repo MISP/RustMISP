@@ -43,10 +43,10 @@ PHASE 1: FOUNDATION
 [x] Implement MispError enum (all 14 error variants)
 [x] Implement MispResult<T> type alias
 [ ] Copy describeTypes.json into data/
-[ ] Unit tests: enum serialization round-trips
-[ ] Unit tests: error type coverage
-[ ] Verify: cargo build succeeds
-[ ] Verify: cargo test succeeds
+[x] Unit tests: enum serialization round-trips
+[x] Unit tests: error type coverage
+[x] Verify: cargo build succeeds
+[x] Verify: cargo test succeeds
 
 --- Iteration 2: HTTP Client & Authentication ---
 [ ] Implement MispClient struct (url, key, ssl, client)
