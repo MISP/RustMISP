@@ -10,10 +10,13 @@ use crate::error::{MispError, MispResult};
 use crate::models::attribute::MispAttribute;
 use crate::models::event::MispEvent;
 use crate::models::event_report::MispEventReport;
+use crate::models::noticelist::MispNoticelist;
 use crate::models::object::{MispObject, MispObjectReference, MispObjectTemplate};
 use crate::models::shadow_attribute::MispShadowAttribute;
 use crate::models::sighting::MispSighting;
 use crate::models::tag::MispTag;
+use crate::models::taxonomy::MispTaxonomy;
+use crate::models::warninglist::MispWarninglist;
 
 /// Async client for the MISP REST API.
 ///
@@ -955,6 +958,217 @@ impl MispClient {
             format!("eventReports/delete/{id}")
         };
         self.post(&path, &serde_json::json!({})).await
+    }
+
+    // ── Taxonomies ──────────────────────────────────────────────────────
+
+    /// List all taxonomies on the MISP instance.
+    pub async fn taxonomies(&self) -> MispResult<Vec<MispTaxonomy>> {
+        let json = self.get("taxonomies/index").await?;
+        let arr = json
+            .as_array()
+            .ok_or_else(|| MispError::UnexpectedResponse("expected array".into()))?;
+        let mut taxonomies = Vec::with_capacity(arr.len());
+        for item in arr {
+            let val = if item.get("Taxonomy").is_some() {
+                &item["Taxonomy"]
+            } else {
+                item
+            };
+            let t: MispTaxonomy = serde_json::from_value(val.clone())?;
+            taxonomies.push(t);
+        }
+        Ok(taxonomies)
+    }
+
+    /// Get a single taxonomy by ID.
+    pub async fn get_taxonomy(&self, id: i64) -> MispResult<MispTaxonomy> {
+        let json = self.get(&format!("taxonomies/view/{id}")).await?;
+        let val = if json.get("Taxonomy").is_some() {
+            &json["Taxonomy"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Enable a taxonomy on the instance.
+    pub async fn enable_taxonomy(&self, id: i64) -> MispResult<Value> {
+        self.post(&format!("taxonomies/enable/{id}"), &serde_json::json!({}))
+            .await
+    }
+
+    /// Disable a taxonomy on the instance.
+    pub async fn disable_taxonomy(&self, id: i64) -> MispResult<Value> {
+        self.post(&format!("taxonomies/disable/{id}"), &serde_json::json!({}))
+            .await
+    }
+
+    /// Enable all tags from a taxonomy.
+    pub async fn enable_taxonomy_tags(&self, id: i64) -> MispResult<Value> {
+        self.post(&format!("taxonomies/addTag/{id}"), &serde_json::json!({}))
+            .await
+    }
+
+    /// Disable all tags from a taxonomy.
+    pub async fn disable_taxonomy_tags(&self, id: i64) -> MispResult<Value> {
+        self.post(
+            &format!("taxonomies/disableTag/{id}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Update all taxonomies from the remote MISP taxonomy repository.
+    pub async fn update_taxonomies(&self) -> MispResult<Value> {
+        self.post("taxonomies/update", &serde_json::json!({})).await
+    }
+
+    /// Set whether a taxonomy is required before events can be published.
+    pub async fn set_taxonomy_required(&self, id: i64, required: bool) -> MispResult<Value> {
+        self.post(
+            &format!("taxonomies/toggleRequired/{id}"),
+            &serde_json::json!({ "Taxonomy": { "required": required } }),
+        )
+        .await
+    }
+
+    // ── Warninglists ────────────────────────────────────────────────────
+
+    /// List all warninglists on the MISP instance.
+    pub async fn warninglists(&self) -> MispResult<Vec<MispWarninglist>> {
+        let json = self.get("warninglists/index").await?;
+        // MISP returns {"Warninglists": [...]} wrapper
+        let arr_val = if json.get("Warninglists").is_some() {
+            &json["Warninglists"]
+        } else {
+            &json
+        };
+        let arr = arr_val
+            .as_array()
+            .ok_or_else(|| MispError::UnexpectedResponse("expected array".into()))?;
+        let mut warninglists = Vec::with_capacity(arr.len());
+        for item in arr {
+            let val = if item.get("Warninglist").is_some() {
+                &item["Warninglist"]
+            } else {
+                item
+            };
+            let w: MispWarninglist = serde_json::from_value(val.clone())?;
+            warninglists.push(w);
+        }
+        Ok(warninglists)
+    }
+
+    /// Get a single warninglist by ID.
+    pub async fn get_warninglist(&self, id: i64) -> MispResult<MispWarninglist> {
+        let json = self.get(&format!("warninglists/view/{id}")).await?;
+        let val = if json.get("Warninglist").is_some() {
+            &json["Warninglist"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Toggle a warninglist on/off. Provide either `id` or `name`.
+    /// `force_enable` can be used to explicitly enable (`true`) or disable (`false`).
+    pub async fn toggle_warninglist(
+        &self,
+        id: Option<i64>,
+        name: Option<&str>,
+        force_enable: Option<bool>,
+    ) -> MispResult<Value> {
+        let mut body = serde_json::Map::new();
+        if let Some(id) = id {
+            body.insert("id".into(), serde_json::json!(id));
+        }
+        if let Some(name) = name {
+            body.insert("name".into(), serde_json::json!(name));
+        }
+        if let Some(enabled) = force_enable {
+            body.insert("enabled".into(), serde_json::json!(enabled));
+        }
+        self.post("warninglists/toggleEnable", &Value::Object(body))
+            .await
+    }
+
+    /// Enable a warninglist by ID.
+    pub async fn enable_warninglist(&self, id: i64) -> MispResult<Value> {
+        self.toggle_warninglist(Some(id), None, Some(true)).await
+    }
+
+    /// Disable a warninglist by ID.
+    pub async fn disable_warninglist(&self, id: i64) -> MispResult<Value> {
+        self.toggle_warninglist(Some(id), None, Some(false)).await
+    }
+
+    /// Check if given values are present in any enabled warninglist.
+    pub async fn values_in_warninglist(&self, values: &[&str]) -> MispResult<Value> {
+        self.post("warninglists/checkValue", &serde_json::json!(values))
+            .await
+    }
+
+    /// Update all warninglists from the remote MISP warninglist repository.
+    pub async fn update_warninglists(&self) -> MispResult<Value> {
+        self.post("warninglists/update", &serde_json::json!({}))
+            .await
+    }
+
+    // ── Noticelists ─────────────────────────────────────────────────────
+
+    /// List all noticelists on the MISP instance.
+    pub async fn noticelists(&self) -> MispResult<Vec<MispNoticelist>> {
+        let json = self.get("noticelists/index").await?;
+        let arr = json
+            .as_array()
+            .ok_or_else(|| MispError::UnexpectedResponse("expected array".into()))?;
+        let mut noticelists = Vec::with_capacity(arr.len());
+        for item in arr {
+            let val = if item.get("Noticelist").is_some() {
+                &item["Noticelist"]
+            } else {
+                item
+            };
+            let n: MispNoticelist = serde_json::from_value(val.clone())?;
+            noticelists.push(n);
+        }
+        Ok(noticelists)
+    }
+
+    /// Get a single noticelist by ID.
+    pub async fn get_noticelist(&self, id: i64) -> MispResult<MispNoticelist> {
+        let json = self.get(&format!("noticelists/view/{id}")).await?;
+        let val = if json.get("Noticelist").is_some() {
+            &json["Noticelist"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Enable a noticelist by ID.
+    pub async fn enable_noticelist(&self, id: i64) -> MispResult<Value> {
+        self.post(
+            &format!("noticelists/toggleEnable/{id}"),
+            &serde_json::json!({ "Noticelist": { "enabled": true } }),
+        )
+        .await
+    }
+
+    /// Disable a noticelist by ID.
+    pub async fn disable_noticelist(&self, id: i64) -> MispResult<Value> {
+        self.post(
+            &format!("noticelists/toggleEnable/{id}"),
+            &serde_json::json!({ "Noticelist": { "enabled": false } }),
+        )
+        .await
+    }
+
+    /// Update all noticelists from the remote MISP noticelist repository.
+    pub async fn update_noticelists(&self) -> MispResult<Value> {
+        self.post("noticelists/update", &serde_json::json!({}))
+            .await
     }
 }
 
@@ -2211,5 +2425,500 @@ mod tests {
 
         let result = client.delete_event_report(10, true).await.unwrap();
         assert_eq!(result["message"], "Event report permanently deleted.");
+    }
+
+    // ── Taxonomy tests ──────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn taxonomies_list() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/taxonomies/index"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "Taxonomy": {
+                        "id": "1",
+                        "namespace": "tlp",
+                        "description": "Traffic Light Protocol",
+                        "version": "5",
+                        "enabled": true,
+                        "exclusive": true,
+                        "required": false,
+                        "highlighted": false
+                    }
+                },
+                {
+                    "Taxonomy": {
+                        "id": "2",
+                        "namespace": "admiralty-scale",
+                        "description": "Admiralty Scale",
+                        "version": "3",
+                        "enabled": false,
+                        "exclusive": false,
+                        "required": false,
+                        "highlighted": false
+                    }
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let taxonomies = client.taxonomies().await.unwrap();
+        assert_eq!(taxonomies.len(), 2);
+        assert_eq!(taxonomies[0].namespace, "tlp");
+        assert!(taxonomies[0].enabled);
+        assert_eq!(taxonomies[1].namespace, "admiralty-scale");
+        assert!(!taxonomies[1].enabled);
+    }
+
+    #[tokio::test]
+    async fn get_taxonomy_unwraps() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/taxonomies/view/1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "Taxonomy": {
+                    "id": "1",
+                    "namespace": "tlp",
+                    "description": "Traffic Light Protocol",
+                    "version": "5",
+                    "enabled": true,
+                    "exclusive": true,
+                    "required": false,
+                    "highlighted": false
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let t = client.get_taxonomy(1).await.unwrap();
+        assert_eq!(t.id, Some(1));
+        assert_eq!(t.namespace, "tlp");
+        assert!(t.enabled);
+    }
+
+    #[tokio::test]
+    async fn enable_taxonomy_posts() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/taxonomies/enable/1"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Taxonomy enabled."})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client.enable_taxonomy(1).await.unwrap();
+        assert_eq!(result["message"], "Taxonomy enabled.");
+    }
+
+    #[tokio::test]
+    async fn disable_taxonomy_posts() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/taxonomies/disable/1"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Taxonomy disabled."})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client.disable_taxonomy(1).await.unwrap();
+        assert_eq!(result["message"], "Taxonomy disabled.");
+    }
+
+    #[tokio::test]
+    async fn enable_taxonomy_tags_posts() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/taxonomies/addTag/1"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Tags added."})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client.enable_taxonomy_tags(1).await.unwrap();
+        assert_eq!(result["message"], "Tags added.");
+    }
+
+    #[tokio::test]
+    async fn update_taxonomies_posts() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/taxonomies/update"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Taxonomies updated."})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client.update_taxonomies().await.unwrap();
+        assert_eq!(result["message"], "Taxonomies updated.");
+    }
+
+    #[tokio::test]
+    async fn set_taxonomy_required_posts() {
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/taxonomies/toggleRequired/1"))
+            .and(body_partial_json(
+                serde_json::json!({"Taxonomy": {"required": true}}),
+            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Taxonomy set as required."})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client.set_taxonomy_required(1, true).await.unwrap();
+        assert_eq!(result["message"], "Taxonomy set as required.");
+    }
+
+    // ── Warninglist tests ───────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn warninglists_list() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/warninglists/index"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "Warninglists": [
+                    {
+                        "Warninglist": {
+                            "id": "10",
+                            "name": "Public DNS resolvers",
+                            "type": "string",
+                            "description": "Known DNS resolvers",
+                            "version": "3",
+                            "enabled": true,
+                            "warninglist_entry_count": "42"
+                        }
+                    },
+                    {
+                        "Warninglist": {
+                            "id": "11",
+                            "name": "RFC 5735 CIDR blocks",
+                            "type": "cidr",
+                            "description": "RFC 5735 address blocks",
+                            "version": "2",
+                            "enabled": false,
+                            "warninglist_entry_count": "15"
+                        }
+                    }
+                ]
+            })))
+            .mount(&server)
+            .await;
+
+        let warninglists = client.warninglists().await.unwrap();
+        assert_eq!(warninglists.len(), 2);
+        assert_eq!(warninglists[0].name, "Public DNS resolvers");
+        assert!(warninglists[0].enabled);
+        assert_eq!(warninglists[1].name, "RFC 5735 CIDR blocks");
+        assert!(!warninglists[1].enabled);
+    }
+
+    #[tokio::test]
+    async fn get_warninglist_unwraps() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/warninglists/view/10"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "Warninglist": {
+                    "id": "10",
+                    "name": "Public DNS resolvers",
+                    "type": "string",
+                    "version": "3",
+                    "enabled": true,
+                    "warninglist_entry_count": "42"
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let w = client.get_warninglist(10).await.unwrap();
+        assert_eq!(w.id, Some(10));
+        assert_eq!(w.name, "Public DNS resolvers");
+        assert!(w.enabled);
+    }
+
+    #[tokio::test]
+    async fn enable_warninglist_sends_toggle() {
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/warninglists/toggleEnable"))
+            .and(body_partial_json(
+                serde_json::json!({"id": 10, "enabled": true}),
+            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Warninglist enabled."})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client.enable_warninglist(10).await.unwrap();
+        assert_eq!(result["message"], "Warninglist enabled.");
+    }
+
+    #[tokio::test]
+    async fn disable_warninglist_sends_toggle() {
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/warninglists/toggleEnable"))
+            .and(body_partial_json(
+                serde_json::json!({"id": 5, "enabled": false}),
+            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Warninglist disabled."})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client.disable_warninglist(5).await.unwrap();
+        assert_eq!(result["message"], "Warninglist disabled.");
+    }
+
+    #[tokio::test]
+    async fn values_in_warninglist_posts_values() {
+        use wiremock::matchers::{body_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/warninglists/checkValue"))
+            .and(body_json(serde_json::json!(["8.8.8.8", "1.1.1.1"])))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "8.8.8.8": [{"id": 10, "name": "Public DNS resolvers"}],
+                "1.1.1.1": [{"id": 10, "name": "Public DNS resolvers"}]
+            })))
+            .mount(&server)
+            .await;
+
+        let result = client
+            .values_in_warninglist(&["8.8.8.8", "1.1.1.1"])
+            .await
+            .unwrap();
+        assert!(result["8.8.8.8"].is_array());
+        assert!(result["1.1.1.1"].is_array());
+    }
+
+    #[tokio::test]
+    async fn update_warninglists_posts() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/warninglists/update"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Warninglists updated."})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client.update_warninglists().await.unwrap();
+        assert_eq!(result["message"], "Warninglists updated.");
+    }
+
+    // ── Noticelist tests ────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn noticelists_list() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/noticelists/index"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "Noticelist": {
+                        "id": "5",
+                        "name": "rfc1918",
+                        "expanded_name": "RFC 1918 — Private IP ranges",
+                        "version": "2",
+                        "enabled": true
+                    }
+                },
+                {
+                    "Noticelist": {
+                        "id": "6",
+                        "name": "rfc5735",
+                        "expanded_name": "RFC 5735 — Special Use IPv4 Addresses",
+                        "version": "1",
+                        "enabled": false
+                    }
+                }
+            ])))
+            .mount(&server)
+            .await;
+
+        let noticelists = client.noticelists().await.unwrap();
+        assert_eq!(noticelists.len(), 2);
+        assert_eq!(noticelists[0].name, "rfc1918");
+        assert!(noticelists[0].enabled);
+        assert_eq!(noticelists[1].name, "rfc5735");
+        assert!(!noticelists[1].enabled);
+    }
+
+    #[tokio::test]
+    async fn get_noticelist_unwraps() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/noticelists/view/5"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "Noticelist": {
+                    "id": "5",
+                    "name": "rfc1918",
+                    "expanded_name": "RFC 1918 — Private IP ranges",
+                    "version": "2",
+                    "enabled": true
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let n = client.get_noticelist(5).await.unwrap();
+        assert_eq!(n.id, Some(5));
+        assert_eq!(n.name, "rfc1918");
+        assert!(n.enabled);
+    }
+
+    #[tokio::test]
+    async fn enable_noticelist_posts() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/noticelists/toggleEnable/5"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Noticelist enabled."})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client.enable_noticelist(5).await.unwrap();
+        assert_eq!(result["message"], "Noticelist enabled.");
+    }
+
+    #[tokio::test]
+    async fn disable_noticelist_posts() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/noticelists/toggleEnable/5"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Noticelist disabled."})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client.disable_noticelist(5).await.unwrap();
+        assert_eq!(result["message"], "Noticelist disabled.");
+    }
+
+    #[tokio::test]
+    async fn update_noticelists_posts() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/noticelists/update"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Noticelists updated."})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client.update_noticelists().await.unwrap();
+        assert_eq!(result["message"], "Noticelists updated.");
     }
 }

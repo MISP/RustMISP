@@ -155,30 +155,30 @@ PHASE 3: INTELLIGENCE LAYER
 ================================================================================
 
 --- Iteration 6: Taxonomies, Warninglists, Noticelists ---
-[ ] Implement MispTaxonomy struct (serde)
-[ ] Implement taxonomies() - GET /taxonomies/index
-[ ] Implement get_taxonomy(id) - GET /taxonomies/view/{id}
-[ ] Implement enable_taxonomy(id) - POST /taxonomies/enable/{id}
-[ ] Implement disable_taxonomy(id) - POST /taxonomies/disable/{id}
-[ ] Implement enable_taxonomy_tags(id) - POST /taxonomies/addTag/{id}
-[ ] Implement disable_taxonomy_tags(id) - POST /taxonomies/disableTag/{id}
-[ ] Implement update_taxonomies() - POST /taxonomies/update
-[ ] Implement set_taxonomy_required(id, required) - POST /taxonomies/toggleRequired/{id}
-[ ] Implement MispWarninglist struct (serde)
-[ ] Implement warninglists() - GET /warninglists/index
-[ ] Implement get_warninglist(id) - GET /warninglists/view/{id}
-[ ] Implement toggle_warninglist(id, name, force) - POST /warninglists/toggleEnable
-[ ] Implement enable_warninglist(id) - POST /warninglists/toggleEnable (force=true)
-[ ] Implement disable_warninglist(id) - POST /warninglists/toggleEnable (force=false)
-[ ] Implement values_in_warninglist(values) - POST /warninglists/checkValue
-[ ] Implement update_warninglists() - POST /warninglists/update
-[ ] Implement MispNoticelist struct (serde)
-[ ] Implement noticelists() - GET /noticelists/index
-[ ] Implement get_noticelist(id) - GET /noticelists/view/{id}
-[ ] Implement enable_noticelist(id) - POST /noticelists/toggleEnable/{id}
-[ ] Implement disable_noticelist(id) - POST /noticelists/toggleEnable/{id}
-[ ] Implement update_noticelists() - POST /noticelists/update
-[ ] Unit tests: serde round-trips for taxonomy/warninglist/noticelist
+[x] Implement MispTaxonomy struct (serde)
+[x] Implement taxonomies() - GET /taxonomies/index
+[x] Implement get_taxonomy(id) - GET /taxonomies/view/{id}
+[x] Implement enable_taxonomy(id) - POST /taxonomies/enable/{id}
+[x] Implement disable_taxonomy(id) - POST /taxonomies/disable/{id}
+[x] Implement enable_taxonomy_tags(id) - POST /taxonomies/addTag/{id}
+[x] Implement disable_taxonomy_tags(id) - POST /taxonomies/disableTag/{id}
+[x] Implement update_taxonomies() - POST /taxonomies/update
+[x] Implement set_taxonomy_required(id, required) - POST /taxonomies/toggleRequired/{id}
+[x] Implement MispWarninglist struct (serde)
+[x] Implement warninglists() - GET /warninglists/index
+[x] Implement get_warninglist(id) - GET /warninglists/view/{id}
+[x] Implement toggle_warninglist(id, name, force) - POST /warninglists/toggleEnable
+[x] Implement enable_warninglist(id) - POST /warninglists/toggleEnable (force=true)
+[x] Implement disable_warninglist(id) - POST /warninglists/toggleEnable (force=false)
+[x] Implement values_in_warninglist(values) - POST /warninglists/checkValue
+[x] Implement update_warninglists() - POST /warninglists/update
+[x] Implement MispNoticelist struct (serde)
+[x] Implement noticelists() - GET /noticelists/index
+[x] Implement get_noticelist(id) - GET /noticelists/view/{id}
+[x] Implement enable_noticelist(id) - POST /noticelists/toggleEnable/{id}
+[x] Implement disable_noticelist(id) - POST /noticelists/toggleEnable/{id}
+[x] Implement update_noticelists() - POST /noticelists/update
+[x] Unit tests: serde round-trips for taxonomy/warninglist/noticelist
 
 --- Iteration 7: Galaxies, Decaying Models, Correlation Exclusions ---
 [ ] Implement MispGalaxy struct (serde)
