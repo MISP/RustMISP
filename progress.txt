@@ -403,11 +403,11 @@ PHASE 6: TOOLS & POLISH
 [x]   - galaxy_operations.rs
 [x]   - sightings.rs
 [x]   - sharing_groups.rs
-[ ] Complete rustdoc documentation for all public types and methods
+[x] Complete rustdoc documentation for all public types and methods
 [ ] Write README.md with quickstart guide
-[ ] Verify: cargo doc --no-deps builds cleanly
-[ ] Verify: cargo clippy -- -D warnings passes
-[ ] Verify: cargo test passes (unit tests)
+[x] Verify: cargo doc --no-deps builds cleanly
+[x] Verify: cargo clippy -- -D warnings passes
+[x] Verify: cargo test passes (unit tests)
 [ ] Verify: cargo test -- --ignored passes (integration tests, requires MISP)
 
 ================================================================================

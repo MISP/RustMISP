@@ -6,8 +6,11 @@ use crate::error::{MispError, MispResult};
 /// Controller to search against.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SearchController {
+    /// Search against `/events/restSearch`.
     Events,
+    /// Search against `/attributes/restSearch`.
     Attributes,
+    /// Search against `/objects/restSearch`.
     Objects,
 }
 
@@ -26,16 +29,27 @@ impl SearchController {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ReturnFormat {
+    /// JSON (default).
     Json,
+    /// XML format.
     Xml,
+    /// Comma-separated values.
     Csv,
+    /// Plain text, one value per line.
     Text,
+    /// STIX 1.x XML.
     Stix,
+    /// STIX 2.x JSON.
     Stix2,
+    /// Suricata IDS rules.
     Suricata,
+    /// Snort IDS rules.
     Snort,
+    /// YARA rules.
     Yara,
+    /// Response Policy Zone (DNS).
     Rpz,
+    /// OpenIOC XML.
     #[serde(rename = "openioc")]
     OpenIoc,
 }
@@ -64,65 +78,108 @@ impl ReturnFormat {
 /// All fields are optional; only non-`None` values are included in the request.
 #[derive(Debug, Clone, Default)]
 pub struct SearchParameters {
-    // Core filters
+    /// Filter by attribute value (string or complex query).
     pub value: Option<Value>,
+    /// Filter by attribute type (e.g., `"ip-src"`, `"domain"`).
     pub type_attribute: Option<Value>,
+    /// Filter by attribute category (e.g., `"Network activity"`).
     pub category: Option<Value>,
+    /// Filter by organisation (name or ID).
     pub org: Option<Value>,
+    /// Filter by tags (string, list, or complex query via [`build_complex_query`]).
     pub tags: Option<Value>,
+    /// Filter by event ID(s).
     pub event_id: Option<Value>,
+    /// Filter by UUID(s).
     pub uuid: Option<Value>,
 
-    // Time-based filters
+    /// Start date filter (`YYYY-MM-DD`).
     pub date_from: Option<String>,
+    /// End date filter (`YYYY-MM-DD`).
     pub date_to: Option<String>,
+    /// Relative time filter (e.g., `"5d"`, `"12h"`).
     pub last: Option<String>,
+    /// Attribute timestamp filter (epoch or relative).
     pub timestamp: Option<Value>,
+    /// Event publish timestamp filter.
     pub publish_timestamp: Option<Value>,
+    /// Event-level timestamp filter.
     pub event_timestamp: Option<Value>,
 
-    // Boolean filters
+    /// Only return attributes not on any enabled warninglist.
     pub enforce_warninglist: Option<bool>,
+    /// Filter by IDS flag.
     pub to_ids: Option<bool>,
+    /// Include soft-deleted attributes (bool or `[0,1]` for both).
     pub deleted: Option<Value>,
+    /// Filter by event published status.
     pub published: Option<bool>,
+    /// Include attachment data (base64) in results.
     pub with_attachments: Option<bool>,
 
-    // Include flags
+    /// Include the parent event UUID in attribute results.
     pub include_event_uuid: Option<bool>,
+    /// Include event-level tags in attribute results.
     pub include_event_tags: Option<bool>,
+    /// Include shadow attribute proposals.
     pub include_proposals: Option<bool>,
+    /// Include correlation counts.
     pub include_correlations: Option<bool>,
+    /// Include sightings data.
     pub include_sightings: Option<bool>,
+    /// Include decay score information.
     pub include_decay_score: Option<bool>,
+    /// Include the full decaying model definition.
     pub include_full_model: Option<bool>,
+    /// Include event context in attribute results.
     pub include_context: Option<bool>,
 
-    // Pagination / limits
+    /// Maximum number of results to return.
     pub limit: Option<i64>,
+    /// Page number for paginated results (1-based).
     pub page: Option<i64>,
 
-    // Other filters
+    /// Filter by threat level (1=High, 2=Medium, 3=Low, 4=Undefined).
     pub threat_level_id: Option<Value>,
+    /// Filter by analysis state (0=Initial, 1=Ongoing, 2=Complete).
     pub analysis: Option<Value>,
+    /// Filter by distribution level.
     pub distribution: Option<Value>,
+    /// Filter by sharing group ID.
     pub sharing_group_id: Option<Value>,
+    /// Filter by object relation name.
     pub object_relation: Option<Value>,
+    /// Filter by comment content.
     pub comment: Option<Value>,
+    /// Filter by first_seen datetime.
     pub first_seen: Option<String>,
+    /// Filter by last_seen datetime.
     pub last_seen: Option<String>,
+    /// Specific attribute fields to return.
     pub requested_attributes: Option<Vec<String>>,
+    /// Output format (defaults to JSON).
     pub return_format: Option<ReturnFormat>,
+    /// Only return sharing group references, not full objects.
     pub sg_reference_only: Option<bool>,
+    /// Search across all searchable fields.
     pub searchall: Option<bool>,
+    /// Quick filter string applied across multiple fields.
     pub quickfilter: Option<String>,
+    /// Decaying model to apply.
     pub decaying_model: Option<Value>,
+    /// Minimum decay score threshold.
     pub score: Option<Value>,
+    /// Exclude attributes that have decayed below the threshold.
     pub exclude_decayed: Option<bool>,
+    /// Override parameters for the decaying model.
     pub model_overrides: Option<Value>,
+    /// Return only event metadata (no attributes).
     pub metadata: Option<bool>,
+    /// Filter by attribute-level timestamp.
     pub attribute_timestamp: Option<Value>,
+    /// Filter by event info field.
     pub event_info: Option<String>,
+    /// Omit CSV header row.
     pub headerless: Option<bool>,
 }
 

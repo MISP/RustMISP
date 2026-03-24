@@ -147,14 +147,17 @@ pub struct MispEvent {
 /// Minimal organisation reference embedded in event responses.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MispEventOrg {
+    /// Organisation numeric ID.
     #[serde(
         default,
         with = "string_or_i64_opt",
         skip_serializing_if = "Option::is_none"
     )]
     pub id: Option<i64>,
+    /// Organisation name.
     #[serde(default)]
     pub name: String,
+    /// Organisation UUID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uuid: Option<String>,
 }

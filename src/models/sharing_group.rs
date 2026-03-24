@@ -95,6 +95,7 @@ pub struct MispSharingGroup {
 /// An organisation entry within a sharing group.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SharingGroupOrg {
+    /// Unique identifier of this sharing group org entry.
     #[serde(
         default,
         with = "string_or_i64_opt",
@@ -102,6 +103,7 @@ pub struct SharingGroupOrg {
     )]
     pub id: Option<i64>,
 
+    /// ID of the parent sharing group.
     #[serde(
         default,
         with = "string_or_i64_opt",
@@ -109,6 +111,7 @@ pub struct SharingGroupOrg {
     )]
     pub sharing_group_id: Option<i64>,
 
+    /// ID of the organisation.
     #[serde(
         default,
         with = "string_or_i64_opt",
@@ -116,9 +119,11 @@ pub struct SharingGroupOrg {
     )]
     pub org_id: Option<i64>,
 
+    /// Whether this organisation can extend (re-share) the sharing group.
     #[serde(default, with = "flexible_bool")]
     pub extend: bool,
 
+    /// Nested organisation details (read-only).
     #[serde(
         default,
         rename = "Organisation",
@@ -130,6 +135,7 @@ pub struct SharingGroupOrg {
 /// A server entry within a sharing group.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SharingGroupServer {
+    /// Unique identifier of this sharing group server entry.
     #[serde(
         default,
         with = "string_or_i64_opt",
@@ -137,6 +143,7 @@ pub struct SharingGroupServer {
     )]
     pub id: Option<i64>,
 
+    /// ID of the parent sharing group.
     #[serde(
         default,
         with = "string_or_i64_opt",
@@ -144,6 +151,7 @@ pub struct SharingGroupServer {
     )]
     pub sharing_group_id: Option<i64>,
 
+    /// ID of the server.
     #[serde(
         default,
         with = "string_or_i64_opt",
@@ -151,6 +159,7 @@ pub struct SharingGroupServer {
     )]
     pub server_id: Option<i64>,
 
+    /// Whether all organisations on this server receive the data.
     #[serde(default, with = "flexible_bool")]
     pub all_orgs: bool,
 }

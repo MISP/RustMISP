@@ -2302,11 +2302,11 @@ impl MispClient {
     /// Search MISP using the REST search API.
     ///
     /// Supports searching events, attributes, or objects with 50+ optional
-    /// parameters. Use [`SearchBuilder`] for ergonomic query construction.
+    /// parameters. Use [`crate::SearchBuilder`] for ergonomic query construction.
     ///
     /// # Arguments
     /// * `controller` - Which controller to search against (events, attributes, objects)
-    /// * `params` - Search parameters built via [`SearchBuilder`] or [`SearchParameters`]
+    /// * `params` - Search parameters built via [`crate::SearchBuilder`] or [`crate::SearchParameters`]
     ///
     /// # Example
     /// ```no_run

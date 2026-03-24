@@ -17,7 +17,12 @@ pub enum MispError {
 
     /// The MISP server returned an error response.
     #[error("MISP API error ({status}): {message}")]
-    ApiError { status: u16, message: String },
+    ApiError {
+        /// HTTP status code returned by the MISP server.
+        status: u16,
+        /// Error message from the MISP server.
+        message: String,
+    },
 
     /// Authentication failed (invalid API key or insufficient permissions).
     #[error("Authentication error: {0}")]

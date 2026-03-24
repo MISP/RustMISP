@@ -9,6 +9,7 @@ use serde::{self, Deserialize, Deserializer, Serializer};
 pub mod string_or_i64_opt {
     use super::*;
 
+    /// Serialize an `Option<i64>` as a quoted string (matching MISP wire format).
     pub fn serialize<S>(value: &Option<i64>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -19,6 +20,7 @@ pub mod string_or_i64_opt {
         }
     }
 
+    /// Deserialize an `Option<i64>` from a string, number, or null.
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
     where
         D: Deserializer<'de>,
@@ -47,6 +49,7 @@ pub mod string_or_i64_opt {
 pub mod string_or_i64 {
     use super::*;
 
+    /// Serialize an `i64` as a quoted string (matching MISP wire format).
     pub fn serialize<S>(value: &i64, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -54,6 +57,7 @@ pub mod string_or_i64 {
         serializer.serialize_str(&value.to_string())
     }
 
+    /// Deserialize an `i64` from a string or number.
     pub fn deserialize<'de, D>(deserializer: D) -> Result<i64, D::Error>
     where
         D: Deserializer<'de>,
@@ -75,6 +79,7 @@ pub mod string_or_i64 {
 pub mod flexible_bool {
     use super::*;
 
+    /// Serialize a `bool` as a native JSON boolean.
     pub fn serialize<S>(value: &bool, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -82,6 +87,7 @@ pub mod flexible_bool {
         serializer.serialize_bool(*value)
     }
 
+    /// Deserialize a `bool` from `true`/`false`, `0`/`1`, or their string forms.
     pub fn deserialize<'de, D>(deserializer: D) -> Result<bool, D::Error>
     where
         D: Deserializer<'de>,
@@ -106,6 +112,7 @@ pub mod flexible_bool {
 pub mod flexible_bool_opt {
     use super::*;
 
+    /// Serialize an `Option<bool>` as a native JSON boolean or null.
     pub fn serialize<S>(value: &Option<bool>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -116,6 +123,7 @@ pub mod flexible_bool_opt {
         }
     }
 
+    /// Deserialize an `Option<bool>` from bool-like values or null.
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
     where
         D: Deserializer<'de>,
