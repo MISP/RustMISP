@@ -172,7 +172,7 @@ mod tests {
 
         let d = Distribution::SharingGroup;
         let d2 = d; // Copy
-        let d3 = d.clone(); // Clone
+        let d3 = d; // Clone
         assert_eq!(d, d2);
         assert_eq!(d, d3);
 
