@@ -6,14 +6,18 @@ pub mod search;
 pub use client::{MispClient, MispClientBuilder, register_user};
 pub use error::{MispError, MispResult};
 pub use models::attribute::MispAttribute;
+pub use models::blocklist::{MispEventBlocklist, MispOrganisationBlocklist};
+pub use models::community::MispCommunity;
 pub use models::correlation::{MispCorrelationExclusion, MispDecayingModel};
 pub use models::enums::{Analysis, Distribution, ThreatLevel};
 pub use models::event::{MispEvent, MispEventOrg};
+pub use models::event_delegation::MispEventDelegation;
 pub use models::event_report::MispEventReport;
 pub use models::feed::MispFeed;
 pub use models::galaxy::{
     MispGalaxy, MispGalaxyCluster, MispGalaxyClusterElement, MispGalaxyClusterRelation,
 };
+pub use models::log::MispLog;
 pub use models::noticelist::MispNoticelist;
 pub use models::object::{MispObject, MispObjectReference, MispObjectTemplate};
 pub use models::organisation::MispOrganisation;

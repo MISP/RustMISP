@@ -1,10 +1,14 @@
 pub mod attribute;
+pub mod blocklist;
+pub mod community;
 pub mod correlation;
 pub mod enums;
 pub mod event;
+pub mod event_delegation;
 pub mod event_report;
 pub mod feed;
 pub mod galaxy;
+pub mod log;
 pub mod noticelist;
 pub mod object;
 pub mod organisation;
@@ -20,14 +24,18 @@ pub mod user_setting;
 pub mod warninglist;
 
 pub use attribute::MispAttribute;
+pub use blocklist::{MispEventBlocklist, MispOrganisationBlocklist};
+pub use community::MispCommunity;
 pub use correlation::{MispCorrelationExclusion, MispDecayingModel};
 pub use enums::{Analysis, Distribution, ThreatLevel};
 pub use event::{MispEvent, MispEventOrg};
+pub use event_delegation::MispEventDelegation;
 pub use event_report::MispEventReport;
 pub use feed::MispFeed;
 pub use galaxy::{
     MispGalaxy, MispGalaxyCluster, MispGalaxyClusterElement, MispGalaxyClusterRelation,
 };
+pub use log::MispLog;
 pub use noticelist::MispNoticelist;
 pub use object::{MispObject, MispObjectReference, MispObjectTemplate};
 pub use organisation::MispOrganisation;

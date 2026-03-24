@@ -8,8 +8,11 @@ use url::Url;
 
 use crate::error::{MispError, MispResult};
 use crate::models::attribute::MispAttribute;
+use crate::models::blocklist::{MispEventBlocklist, MispOrganisationBlocklist};
+use crate::models::community::MispCommunity;
 use crate::models::correlation::{MispCorrelationExclusion, MispDecayingModel};
 use crate::models::event::MispEvent;
+use crate::models::event_delegation::MispEventDelegation;
 use crate::models::event_report::MispEventReport;
 use crate::models::feed::MispFeed;
 use crate::models::galaxy::{MispGalaxy, MispGalaxyCluster, MispGalaxyClusterRelation};
@@ -2486,6 +2489,366 @@ impl MispClient {
     pub async fn search_feeds(&self, value: &str) -> MispResult<Value> {
         let body = serde_json::json!({"value": value});
         self.post("feeds/searchCaches", &body).await
+    }
+
+    // ===== ADVANCED FEATURES (Iteration 11) =====
+
+    /// Import free-text indicators into an event.
+    ///
+    /// Parses a block of free-text for IOCs and creates attributes.
+    pub async fn freetext(
+        &self,
+        event_id: i64,
+        string: &str,
+        adhering_to_warninglists: Option<bool>,
+        distribution: Option<i64>,
+        sharing_group_id: Option<i64>,
+    ) -> MispResult<Value> {
+        let mut body = serde_json::Map::new();
+        body.insert("value".into(), serde_json::json!(string));
+        if let Some(adhere) = adhering_to_warninglists {
+            body.insert("adhereToWarninglists".into(), serde_json::json!(adhere));
+        }
+        if let Some(dist) = distribution {
+            body.insert("distribution".into(), serde_json::json!(dist));
+        }
+        if let Some(sg) = sharing_group_id {
+            body.insert("sharing_group_id".into(), serde_json::json!(sg));
+        }
+        self.post(
+            &format!("attributes/freeTextImport/{event_id}"),
+            &Value::Object(body),
+        )
+        .await
+    }
+
+    /// Upload a STIX file to create/update events.
+    ///
+    /// `version` should be `1` or `2` for STIX 1.x or STIX 2.x respectively.
+    pub async fn upload_stix(&self, data: &str, version: u8) -> MispResult<Value> {
+        let ver = if version >= 2 { "2" } else { "" };
+        let body = serde_json::json!({"data": data});
+        self.post(&format!("events/upload_stix{ver}"), &body).await
+    }
+
+    /// Make a raw API call to any MISP endpoint.
+    pub async fn direct_call(
+        &self,
+        relative_path: &str,
+        data: Option<&Value>,
+    ) -> MispResult<Value> {
+        match data {
+            Some(body) => self.post(relative_path, body).await,
+            None => self.get(relative_path).await,
+        }
+    }
+
+    /// Push an event to ZMQ.
+    pub async fn push_event_to_zmq(&self, id: i64) -> MispResult<Value> {
+        self.post(
+            &format!("events/pushEventToZMQ/{id}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Change the sharing group on an entity (event or attribute).
+    ///
+    /// `entity_type` should be `"event"` or `"attribute"`.
+    pub async fn change_sharing_group_on_entity(
+        &self,
+        entity_uuid: &str,
+        sharing_group_id: i64,
+        entity_type: &str,
+    ) -> MispResult<Value> {
+        let body = serde_json::json!({
+            "uuid": entity_uuid,
+            "sharing_group_id": sharing_group_id,
+            "type": entity_type,
+        });
+        self.post("events/changeSharingGroup", &body).await
+    }
+
+    /// Get attribute type/category statistics.
+    pub async fn attributes_statistics(
+        &self,
+        context: Option<&str>,
+        percentage: Option<bool>,
+    ) -> MispResult<Value> {
+        let ctx = context.unwrap_or("type");
+        let pct = if percentage.unwrap_or(false) {
+            "1"
+        } else {
+            "0"
+        };
+        self.get(&format!("attributes/attributeStatistics/{ctx}/{pct}"))
+            .await
+    }
+
+    /// Get tag statistics.
+    pub async fn tags_statistics(
+        &self,
+        percentage: Option<bool>,
+        name_sort: Option<bool>,
+    ) -> MispResult<Value> {
+        let pct = if percentage.unwrap_or(false) {
+            "1"
+        } else {
+            "0"
+        };
+        let ns = if name_sort.unwrap_or(false) { "1" } else { "0" };
+        self.get(&format!("tags/tagStatistics/{pct}/{ns}")).await
+    }
+
+    /// Get user statistics (e.g., login activity, attribute counts).
+    pub async fn users_statistics(&self, context: Option<&str>) -> MispResult<Value> {
+        let ctx = context.unwrap_or("data");
+        self.get(&format!("users/statistics/{ctx}")).await
+    }
+
+    /// List all event blocklist entries.
+    pub async fn event_blocklists(&self) -> MispResult<Vec<MispEventBlocklist>> {
+        let json = self.get("eventBlocklists/index").await?;
+        let arr = json
+            .as_array()
+            .ok_or_else(|| MispError::UnexpectedResponse("expected array".into()))?;
+        let mut items = Vec::with_capacity(arr.len());
+        for item in arr {
+            let val = if item.get("EventBlocklist").is_some() {
+                &item["EventBlocklist"]
+            } else {
+                item
+            };
+            items.push(serde_json::from_value(val.clone())?);
+        }
+        Ok(items)
+    }
+
+    /// List all organisation blocklist entries.
+    pub async fn organisation_blocklists(&self) -> MispResult<Vec<MispOrganisationBlocklist>> {
+        let json = self.get("orgBlocklists/index").await?;
+        let arr = json
+            .as_array()
+            .ok_or_else(|| MispError::UnexpectedResponse("expected array".into()))?;
+        let mut items = Vec::with_capacity(arr.len());
+        for item in arr {
+            let val = if item.get("OrgBlocklist").is_some() {
+                &item["OrgBlocklist"]
+            } else {
+                item
+            };
+            items.push(serde_json::from_value(val.clone())?);
+        }
+        Ok(items)
+    }
+
+    /// Add event UUIDs to the blocklist.
+    pub async fn add_event_blocklist(
+        &self,
+        uuids: &[&str],
+        comment: Option<&str>,
+        event_info: Option<&str>,
+        event_orgc: Option<&str>,
+    ) -> MispResult<Value> {
+        let mut body = serde_json::Map::new();
+        body.insert("uuids".into(), serde_json::json!(uuids));
+        if let Some(c) = comment {
+            body.insert("comment".into(), serde_json::json!(c));
+        }
+        if let Some(info) = event_info {
+            body.insert("event_info".into(), serde_json::json!(info));
+        }
+        if let Some(orgc) = event_orgc {
+            body.insert("event_orgc".into(), serde_json::json!(orgc));
+        }
+        self.post("eventBlocklists/add", &Value::Object(body)).await
+    }
+
+    /// Add organisation UUIDs to the blocklist.
+    pub async fn add_organisation_blocklist(
+        &self,
+        uuids: &[&str],
+        comment: Option<&str>,
+        org_name: Option<&str>,
+    ) -> MispResult<Value> {
+        let mut body = serde_json::Map::new();
+        body.insert("uuids".into(), serde_json::json!(uuids));
+        if let Some(c) = comment {
+            body.insert("comment".into(), serde_json::json!(c));
+        }
+        if let Some(name) = org_name {
+            body.insert("org_name".into(), serde_json::json!(name));
+        }
+        self.post("orgBlocklists/add", &Value::Object(body)).await
+    }
+
+    /// Update an event blocklist entry.
+    pub async fn update_event_blocklist(
+        &self,
+        blocklist: &MispEventBlocklist,
+    ) -> MispResult<Value> {
+        let id = blocklist
+            .id
+            .ok_or_else(|| MispError::MissingField("id".into()))?;
+        let body = serde_json::to_value(blocklist)?;
+        self.post(&format!("eventBlocklists/edit/{id}"), &body)
+            .await
+    }
+
+    /// Update an organisation blocklist entry.
+    pub async fn update_organisation_blocklist(
+        &self,
+        blocklist: &MispOrganisationBlocklist,
+    ) -> MispResult<Value> {
+        let id = blocklist
+            .id
+            .ok_or_else(|| MispError::MissingField("id".into()))?;
+        let body = serde_json::to_value(blocklist)?;
+        self.post(&format!("orgBlocklists/edit/{id}"), &body).await
+    }
+
+    /// Delete an event blocklist entry.
+    pub async fn delete_event_blocklist(&self, id: i64) -> MispResult<Value> {
+        self.post(
+            &format!("eventBlocklists/delete/{id}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Delete an organisation blocklist entry.
+    pub async fn delete_organisation_blocklist(&self, id: i64) -> MispResult<Value> {
+        self.post(
+            &format!("orgBlocklists/delete/{id}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// List all communities.
+    pub async fn communities(&self) -> MispResult<Vec<MispCommunity>> {
+        let json = self.get("communities/index").await?;
+        let arr = json
+            .as_array()
+            .ok_or_else(|| MispError::UnexpectedResponse("expected array".into()))?;
+        let mut items = Vec::with_capacity(arr.len());
+        for item in arr {
+            let val = if item.get("Community").is_some() {
+                &item["Community"]
+            } else {
+                item
+            };
+            items.push(serde_json::from_value(val.clone())?);
+        }
+        Ok(items)
+    }
+
+    /// Get a specific community by ID.
+    pub async fn get_community(&self, id: i64) -> MispResult<MispCommunity> {
+        let json = self.get(&format!("communities/view/{id}")).await?;
+        let val = if json.get("Community").is_some() {
+            &json["Community"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Request access to a community.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn request_community_access(
+        &self,
+        id: i64,
+        requestor_org: Option<&str>,
+        requestor_email: Option<&str>,
+        message: Option<&str>,
+        sync: Option<bool>,
+        anonymise: Option<bool>,
+        mock: Option<bool>,
+    ) -> MispResult<Value> {
+        let mut body = serde_json::Map::new();
+        if let Some(org) = requestor_org {
+            body.insert("requestor_org".into(), serde_json::json!(org));
+        }
+        if let Some(email) = requestor_email {
+            body.insert("requestor_email".into(), serde_json::json!(email));
+        }
+        if let Some(msg) = message {
+            body.insert("message".into(), serde_json::json!(msg));
+        }
+        if let Some(s) = sync {
+            body.insert("sync".into(), serde_json::json!(s));
+        }
+        if let Some(a) = anonymise {
+            body.insert("anonymise".into(), serde_json::json!(a));
+        }
+        if let Some(m) = mock {
+            body.insert("mock".into(), serde_json::json!(m));
+        }
+        self.post(
+            &format!("communities/requestAccess/{id}"),
+            &Value::Object(body),
+        )
+        .await
+    }
+
+    /// List all event delegations.
+    pub async fn event_delegations(&self) -> MispResult<Vec<MispEventDelegation>> {
+        let json = self.get("eventDelegations/index").await?;
+        let arr = json
+            .as_array()
+            .ok_or_else(|| MispError::UnexpectedResponse("expected array".into()))?;
+        let mut items = Vec::with_capacity(arr.len());
+        for item in arr {
+            let val = if item.get("EventDelegation").is_some() {
+                &item["EventDelegation"]
+            } else {
+                item
+            };
+            items.push(serde_json::from_value(val.clone())?);
+        }
+        Ok(items)
+    }
+
+    /// Accept an event delegation.
+    pub async fn accept_event_delegation(&self, id: i64) -> MispResult<Value> {
+        self.post(
+            &format!("eventDelegations/acceptDelegation/{id}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Discard (reject) an event delegation.
+    pub async fn discard_event_delegation(&self, id: i64) -> MispResult<Value> {
+        self.post(
+            &format!("eventDelegations/deleteDelegation/{id}"),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Delegate an event to another organisation.
+    pub async fn delegate_event(
+        &self,
+        event_id: i64,
+        org_id: i64,
+        distribution: Option<i64>,
+        message: Option<&str>,
+    ) -> MispResult<Value> {
+        let mut body = serde_json::Map::new();
+        body.insert("org_id".into(), serde_json::json!(org_id));
+        if let Some(dist) = distribution {
+            body.insert("distribution".into(), serde_json::json!(dist));
+        }
+        if let Some(msg) = message {
+            body.insert("message".into(), serde_json::json!(msg));
+        }
+        self.post(
+            &format!("eventDelegations/delegateEvent/{event_id}"),
+            &Value::Object(body),
+        )
+        .await
     }
 }
 

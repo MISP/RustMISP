@@ -320,36 +320,36 @@ PHASE 5: SEARCH & ADVANCED
 [x] Unit tests: timestamp parsing
 
 --- Iteration 11: Advanced Features ---
-[ ] Implement freetext(event_id, string, ...) - POST /attributes/freeTextImport/{event_id}
-[ ] Implement upload_stix(path, data, version) - POST /events/upload_stix/{version}
-[ ] Implement direct_call(url, data, params) - raw API call
-[ ] Implement push_event_to_zmq(id) - POST /events/pushEventToZMQ/{id}
-[ ] Implement change_sharing_group_on_entity(entity, sg_id) - POST /events/changeSharingGroup
-[ ] Implement attributes_statistics(context, percentage) - GET /attributes/attributeStatistics/{context}/{percentage}
-[ ] Implement tags_statistics(percentage, name_sort) - GET /tags/tagStatistics/{percentage}/{name_sort}
-[ ] Implement users_statistics(context) - GET /users/statistics/{context}
-[ ] Implement get_all_functions(not_implemented) - introspection
-[ ] Implement MispEventBlocklist struct (serde)
-[ ] Implement MispOrganisationBlocklist struct (serde)
-[ ] Implement event_blocklists() - GET /eventBlocklists/index
-[ ] Implement organisation_blocklists() - GET /orgBlocklists/index
-[ ] Implement add_event_blocklist(uuids, ...) - POST /eventBlocklists/add
-[ ] Implement add_organisation_blocklist(uuids, ...) - POST /orgBlocklists/add
-[ ] Implement update_event_blocklist(bl) - POST /eventBlocklists/edit/{id}
-[ ] Implement update_organisation_blocklist(bl) - POST /orgBlocklists/edit/{id}
-[ ] Implement delete_event_blocklist(id) - POST /eventBlocklists/delete/{id}
-[ ] Implement delete_organisation_blocklist(id) - POST /orgBlocklists/delete/{id}
-[ ] Implement MispCommunity struct (serde)
-[ ] Implement communities() - GET /communities/index
-[ ] Implement get_community(id) - GET /communities/view/{id}
-[ ] Implement request_community_access(id, ...) - POST /communities/requestAccess/{id}
-[ ] Implement MispEventDelegation struct (serde)
-[ ] Implement event_delegations() - GET /eventDelegations/index
-[ ] Implement accept_event_delegation(id) - POST /eventDelegations/acceptDelegation/{id}
-[ ] Implement discard_event_delegation(id) - POST /eventDelegations/deleteDelegation/{id}
-[ ] Implement delegate_event(event, org, ...) - POST /eventDelegations/delegateEvent/{event_id}
-[ ] Implement MispLog struct (serde)
-[ ] Unit tests: blocklist/community/delegation serde
+[x] Implement freetext(event_id, string, ...) - POST /attributes/freeTextImport/{event_id}
+[x] Implement upload_stix(path, data, version) - POST /events/upload_stix/{version}
+[x] Implement direct_call(url, data, params) - raw API call
+[x] Implement push_event_to_zmq(id) - POST /events/pushEventToZMQ/{id}
+[x] Implement change_sharing_group_on_entity(entity, sg_id) - POST /events/changeSharingGroup
+[x] Implement attributes_statistics(context, percentage) - GET /attributes/attributeStatistics/{context}/{percentage}
+[x] Implement tags_statistics(percentage, name_sort) - GET /tags/tagStatistics/{percentage}/{name_sort}
+[x] Implement users_statistics(context) - GET /users/statistics/{context}
+[ ] Implement get_all_functions(not_implemented) - introspection (deferred: Rust introspection differs from Python)
+[x] Implement MispEventBlocklist struct (serde)
+[x] Implement MispOrganisationBlocklist struct (serde)
+[x] Implement event_blocklists() - GET /eventBlocklists/index
+[x] Implement organisation_blocklists() - GET /orgBlocklists/index
+[x] Implement add_event_blocklist(uuids, ...) - POST /eventBlocklists/add
+[x] Implement add_organisation_blocklist(uuids, ...) - POST /orgBlocklists/add
+[x] Implement update_event_blocklist(bl) - POST /eventBlocklists/edit/{id}
+[x] Implement update_organisation_blocklist(bl) - POST /orgBlocklists/edit/{id}
+[x] Implement delete_event_blocklist(id) - POST /eventBlocklists/delete/{id}
+[x] Implement delete_organisation_blocklist(id) - POST /orgBlocklists/delete/{id}
+[x] Implement MispCommunity struct (serde)
+[x] Implement communities() - GET /communities/index
+[x] Implement get_community(id) - GET /communities/view/{id}
+[x] Implement request_community_access(id, ...) - POST /communities/requestAccess/{id}
+[x] Implement MispEventDelegation struct (serde)
+[x] Implement event_delegations() - GET /eventDelegations/index
+[x] Implement accept_event_delegation(id) - POST /eventDelegations/acceptDelegation/{id}
+[x] Implement discard_event_delegation(id) - POST /eventDelegations/deleteDelegation/{id}
+[x] Implement delegate_event(event, org, ...) - POST /eventDelegations/delegateEvent/{event_id}
+[x] Implement MispLog struct (serde)
+[x] Unit tests: blocklist/community/delegation serde
 
 ================================================================================
 PHASE 6: TOOLS & POLISH
