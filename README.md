@@ -127,6 +127,10 @@ let params = SearchBuilder::new()
 let results = client.search(SearchController::Attributes, &params).await?;
 ```
 
+## Documentation
+
+For a complete API reference covering all 140+ methods with examples, see [`docs.md`](docs.md).
+
 ## Examples
 
 See the [`examples/`](examples/) directory:
