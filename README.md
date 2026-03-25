@@ -1,5 +1,11 @@
 # RustMISP
 
+[![CI](https://github.com/iglocska/RustMISP/actions/workflows/ci.yml/badge.svg)](https://github.com/iglocska/RustMISP/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/rustmisp.svg)](https://crates.io/crates/rustmisp)
+[![docs.rs](https://docs.rs/rustmisp/badge.svg)](https://docs.rs/rustmisp)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
+
 A Rust client library for the [MISP](https://www.misp-project.org/) REST API, providing feature parity with [PyMISP](https://github.com/MISP/PyMISP).
 
 RustMISP offers strongly-typed data models for 30+ MISP entity types, an ergonomic async API client with ~243 methods, and an optional blocking wrapper.
