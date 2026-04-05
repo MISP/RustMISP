@@ -163,4 +163,6 @@ Rust 1.85 or later.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT License - see [LICENSE](LICENSE) for details.
+
+* Copyright (C) 2026 Andras Iklody
