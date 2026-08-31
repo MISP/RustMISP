@@ -672,16 +672,20 @@ pub fn parse_relative_timestamp(input: &str) -> MispResult<i64> {
         ));
     }
 
-    let (num_str, suffix) = input.split_at(input.len() - 1);
+    let suffix = input
+        .chars()
+        .last()
+        .ok_or_else(|| MispError::InvalidSearch("empty timestamp string".to_string()))?;
+    let num_str = &input[..input.len() - suffix.len_utf8()];
     let num: i64 = num_str
         .parse()
         .map_err(|_| MispError::InvalidSearch(format!("invalid relative timestamp: {input}")))?;
 
     let multiplier = match suffix {
-        "s" => 1,
-        "m" => 60,
-        "h" => 3600,
-        "d" => 86400,
+        's' => 1,
+        'm' => 60,
+        'h' => 3600,
+        'd' => 86400,
         _ => {
             return Err(MispError::InvalidSearch(format!(
                 "unknown timestamp suffix '{suffix}', expected s/m/h/d"
@@ -845,6 +849,15 @@ mod tests {
     fn parse_relative_timestamp_empty() {
         let result = parse_relative_timestamp("");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_relative_timestamp_multibyte_suffix_does_not_panic() {
+        // "5µ" has a 2-byte UTF-8 suffix char; a byte-index split_at would
+        // land mid-codepoint and panic instead of returning an error.
+        let result = parse_relative_timestamp("5µ");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), MispError::InvalidSearch(_)));
     }
 
     #[test]
