@@ -192,6 +192,16 @@ impl MispClient {
         self.check_response(response).await
     }
 
+    /// Send a POST request with a JSON body and return the raw response text.
+    ///
+    /// Used for non-JSON `ReturnFormat`s (csv, text, xml, stix, suricata,
+    /// snort, yara, rpz, openioc), which MISP returns as plain text rather
+    /// than JSON.
+    async fn post_raw(&self, path: &str, body: &Value) -> MispResult<String> {
+        let response = self.request(Method::POST, path, Some(body)).await?;
+        self.check_response_raw(response).await
+    }
+
     /// Send a HEAD request and return whether the resource exists (2xx).
     #[allow(dead_code)] // Used in later iterations for exists checks
     async fn head(&self, path: &str) -> MispResult<bool> {
@@ -199,8 +209,10 @@ impl MispClient {
         Ok(response.status().is_success())
     }
 
-    /// Check an HTTP response for errors and parse the body as JSON.
-    async fn check_response(&self, response: Response) -> MispResult<Value> {
+    /// Validate an HTTP response's status, translating error statuses into
+    /// `MispError`s. Returns the response unchanged (body not yet read) on
+    /// success so the caller can decide how to interpret the body.
+    async fn check_status(&self, response: Response) -> MispResult<Response> {
         let status = response.status();
 
         if status == StatusCode::FORBIDDEN || status == StatusCode::UNAUTHORIZED {
@@ -238,9 +250,27 @@ impl MispClient {
             });
         }
 
+        Ok(response)
+    }
+
+    /// Check an HTTP response for errors and parse the body as JSON.
+    async fn check_response(&self, response: Response) -> MispResult<Value> {
+        let response = self.check_status(response).await?;
         let body = response.text().await?;
         let json: Value = serde_json::from_str(&body)?;
         Ok(json)
+    }
+
+    /// Check an HTTP response for errors and return the raw body text.
+    ///
+    /// MISP returns plain text (not JSON) for most `ReturnFormat`s other than
+    /// `json`/`stix2` (csv, text, xml, stix, suricata, snort, yara, rpz,
+    /// openioc); forcing `serde_json` on those bodies would fail every 2xx
+    /// response. See PyMISP's `PyMISP._check_response`, which falls back to
+    /// `response.text` whenever the body doesn't decode as JSON.
+    async fn check_response_raw(&self, response: Response) -> MispResult<String> {
+        let response = self.check_status(response).await?;
+        Ok(response.text().await?)
     }
 
     // ── Server / Instance Info ────────────────────────────────────────
@@ -2584,13 +2614,27 @@ impl MispClient {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// Non-JSON return formats (csv, text, xml, stix, suricata, snort, yara,
+    /// rpz, openioc) are returned as [`Value::String`] holding the raw
+    /// response body, since MISP does not emit JSON for them.
     pub async fn search(
         &self,
         controller: crate::search::SearchController,
         params: &crate::search::SearchParameters,
     ) -> MispResult<Value> {
         let body = params.to_json();
-        self.post(controller.rest_search_path(), &body).await
+        let path = controller.rest_search_path();
+        let is_json = params
+            .return_format
+            .as_ref()
+            .is_none_or(crate::search::ReturnFormat::is_json);
+        if is_json {
+            self.post(path, &body).await
+        } else {
+            let text = self.post_raw(path, &body).await?;
+            Ok(Value::String(text))
+        }
     }
 
     /// Search the event index with filter parameters.
@@ -6389,5 +6433,72 @@ mod tests {
 
         let r = client.delete_user_setting("dashboard", None).await.unwrap();
         assert_eq!(r["message"], "Setting deleted.");
+    }
+
+    #[tokio::test]
+    async fn search_csv_returns_raw_text_not_json_error() {
+        use crate::search::{ReturnFormat, SearchBuilder, SearchController};
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        // MISP's restSearch returns a raw CSV body (not JSON) when
+        // returnFormat=csv, matching PyMISP's `search()`, which passes
+        // non-json/yara-json return formats straight through as text
+        // (pymisp/api.py `search()` -> `_check_response`).
+        let csv_body = "uuid,value,type\nabc-123,1.2.3.4,ip-src\n";
+        Mock::given(method("POST"))
+            .and(path("/attributes/restSearch"))
+            .and(body_partial_json(
+                serde_json::json!({"returnFormat": "csv"}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(csv_body.to_string(), "text/csv"))
+            .mount(&server)
+            .await;
+
+        let params = SearchBuilder::new()
+            .return_format(ReturnFormat::Csv)
+            .build();
+
+        // Before the fix, check_response force-JSON-parsed this body and
+        // returned MispError::JsonError even though the request succeeded.
+        let result = client
+            .search(SearchController::Attributes, &params)
+            .await
+            .expect("csv search should succeed, not fail JSON parsing");
+        assert_eq!(result, Value::String(csv_body.to_string()));
+    }
+
+    #[tokio::test]
+    async fn search_json_still_parses_json_body() {
+        use crate::search::{ReturnFormat, SearchBuilder, SearchController};
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/attributes/restSearch"))
+            .and(body_partial_json(
+                serde_json::json!({"returnFormat": "json"}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "response": {"Attribute": []}
+            })))
+            .mount(&server)
+            .await;
+
+        let params = SearchBuilder::new()
+            .return_format(ReturnFormat::Json)
+            .build();
+
+        let result = client
+            .search(SearchController::Attributes, &params)
+            .await
+            .unwrap();
+        assert_eq!(result["response"]["Attribute"], serde_json::json!([]));
     }
 }
