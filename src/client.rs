@@ -1541,9 +1541,21 @@ impl MispClient {
         galaxy_id: i64,
         cluster: &MispGalaxyCluster,
     ) -> MispResult<Value> {
-        let body = serde_json::json!({"GalaxyCluster": cluster});
-        self.post(&format!("galaxy_clusters/add/{galaxy_id}"), &body)
-            .await
+        let cluster_uuid = cluster
+            .uuid
+            .clone()
+            .ok_or_else(|| MispError::MissingField("GalaxyCluster.uuid".into()))?;
+        let mut forked = cluster.clone();
+        forked.extends_uuid = cluster.uuid.clone();
+        forked.extends_version = cluster.version;
+        forked.uuid = None;
+        forked.version = None;
+        let body = serde_json::json!({"GalaxyCluster": forked});
+        self.post(
+            &format!("galaxy_clusters/add/{galaxy_id}/forkUUID:{cluster_uuid}"),
+            &body,
+        )
+        .await
     }
 
     /// Delete a galaxy cluster by ID, optionally hard-deleting.
@@ -5155,6 +5167,52 @@ mod tests {
         let result = client.add_galaxy_cluster(1, &c).await.unwrap();
         assert_eq!(result.id, Some(100));
         assert_eq!(result.value, "NewCluster");
+    }
+
+    #[tokio::test]
+    async fn fork_galaxy_cluster_uses_fork_uuid_path_and_body() {
+        use wiremock::matchers::{body_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        let mut c = crate::MispGalaxyCluster::new("APT28");
+        c.uuid = Some("cluster-uuid".into());
+        c.version = Some(3);
+
+        Mock::given(method("POST"))
+            .and(path("/galaxy_clusters/add/1/forkUUID:cluster-uuid"))
+            .and(body_json(serde_json::json!({
+                "GalaxyCluster": {
+                    "value": "APT28",
+                    "default": false,
+                    "published": false,
+                    "extends_uuid": "cluster-uuid",
+                    "extends_version": "3"
+                }
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "GalaxyCluster": {
+                    "id": "101",
+                    "value": "APT28",
+                    "default": false,
+                    "published": false
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let result = client.fork_galaxy_cluster(1, &c).await.unwrap();
+        assert_eq!(result["GalaxyCluster"]["id"], "101");
+    }
+
+    #[tokio::test]
+    async fn fork_galaxy_cluster_requires_uuid() {
+        let client = MispClient::new("https://misp.example.com", "key", false).unwrap();
+        let c = crate::MispGalaxyCluster::new("test");
+        let result = client.fork_galaxy_cluster(1, &c).await;
+        assert!(matches!(result, Err(MispError::MissingField(_))));
     }
 
     #[tokio::test]
