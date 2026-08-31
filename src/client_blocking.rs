@@ -372,12 +372,14 @@ impl MispClientBlocking {
         self.rt.block_on(self.inner.delete_object(id, hard))
     }
 
-    /// Add a reference between objects.
+    /// Add a reference from `object_id` to another object or attribute.
     pub fn add_object_reference(
         &self,
+        object_id: i64,
         reference: &MispObjectReference,
     ) -> MispResult<MispObjectReference> {
-        self.rt.block_on(self.inner.add_object_reference(reference))
+        self.rt
+            .block_on(self.inner.add_object_reference(object_id, reference))
     }
 
     /// Delete an object reference by ID.

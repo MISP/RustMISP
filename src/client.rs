@@ -693,13 +693,22 @@ impl MispClient {
 
     // ── Object References ────────────────────────────────────────────
 
-    /// Add an object reference.
+    /// Add a reference from `object_id` to another object or attribute.
+    ///
+    /// MISP identifies the source object from the URL path segment (or a
+    /// top-level `object_uuid` in the POST body when no path segment is
+    /// given); any `object_id`/`object_uuid` inside the request body itself
+    /// is ignored and overwritten server-side from the resolved object. See
+    /// `ObjectReferencesController::add()`.
     pub async fn add_object_reference(
         &self,
+        object_id: i64,
         reference: &MispObjectReference,
     ) -> MispResult<MispObjectReference> {
         let body = serde_json::json!({ "ObjectReference": serde_json::to_value(reference)? });
-        let json = self.post("objectReferences/add", &body).await?;
+        let json = self
+            .post(&format!("objectReferences/add/{object_id}"), &body)
+            .await?;
         let ref_val = if json.get("ObjectReference").is_some() {
             &json["ObjectReference"]
         } else {
@@ -3916,15 +3925,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn add_object_reference_sends_wrapped() {
+    async fn add_object_reference_sends_source_object_id_in_path() {
         use wiremock::matchers::{body_partial_json, method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
         let server = MockServer::start().await;
         let client = MispClient::new(server.uri(), "key", false).unwrap();
 
+        // MISP's ObjectReferencesController::add() resolves the source object
+        // from the URL path segment (or a top-level `object_uuid`, absent
+        // here) - it never reads an `object_id` out of the request body. A
+        // POST to the bare `objectReferences/add` path (no id) 404s server
+        // side, so the id must ride the path.
         Mock::given(method("POST"))
-            .and(path("/objectReferences/add"))
+            .and(path("/objectReferences/add/42"))
             .and(body_partial_json(serde_json::json!({
                 "ObjectReference": {
                     "referenced_uuid": "target-uuid",
@@ -3943,7 +3957,7 @@ mod tests {
             .await;
 
         let r = crate::MispObjectReference::new("target-uuid", "related-to");
-        let result = client.add_object_reference(&r).await.unwrap();
+        let result = client.add_object_reference(42, &r).await.unwrap();
         assert_eq!(result.id, Some(30));
         assert_eq!(result.referenced_uuid.as_deref(), Some("target-uuid"));
     }
