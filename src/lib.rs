@@ -29,6 +29,14 @@
 /// Async MISP API client and builder.
 pub mod client;
 /// Blocking (synchronous) MISP API client wrapper.
+///
+/// # Panics
+///
+/// [`MispClientBlocking`](client_blocking::MispClientBlocking) internally
+/// drives an async runtime with `block_on`. Calling any of its methods, or
+/// dropping it, from within an already-running async runtime panics — this
+/// mirrors the constraint documented by `reqwest::blocking`. Use the async
+/// [`MispClient`](client::MispClient) inside async code instead.
 #[cfg(feature = "blocking")]
 pub mod client_blocking;
 /// Error types used throughout the crate.
