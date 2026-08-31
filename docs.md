@@ -624,8 +624,10 @@ use rustmisp::AnalystDataType;
 // Generic get/add/update/delete for any analyst data type
 let data = client.get_analyst_data(AnalystDataType::Note, 1).await?;
 
-let body = serde_json::json!({"note": "test", "object_uuid": "...", "object_type": "Event"});
-client.add_analyst_data(AnalystDataType::Note, &body).await?;
+let body = serde_json::json!({"note": "test"});
+client
+    .add_analyst_data(AnalystDataType::Note, "550e8400-e29b-41d4-a716-446655440000", "Event", &body)
+    .await?;
 
 client.update_analyst_data(AnalystDataType::Note, 1, &body).await?;
 
@@ -635,7 +637,7 @@ client.delete_analyst_data(AnalystDataType::Note, 1).await?;
 | Method | Signature | Returns |
 |--------|-----------|---------|
 | `get_analyst_data` | `(data_type: AnalystDataType, id: i64) -> MispResult<Value>` | Raw JSON |
-| `add_analyst_data` | `(data_type: AnalystDataType, data: &Value) -> MispResult<Value>` | Created data |
+| `add_analyst_data` | `(data_type: AnalystDataType, object_uuid: &str, object_type: &str, data: &Value) -> MispResult<Value>` | Created data |
 | `update_analyst_data` | `(data_type: AnalystDataType, id: i64, data: &Value) -> MispResult<Value>` | Updated data |
 | `delete_analyst_data` | `(data_type: AnalystDataType, id: i64) -> MispResult<Value>` | Deletion confirmation |
 | `get_note` | `(id: i64) -> MispResult<MispNote>` | Typed note |
