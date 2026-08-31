@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::serde_helpers::{flexible_bool, string_or_i64_opt};
+use super::serde_helpers::{flexible_bool, string_or_i64_opt, string_or_int_as_string_opt};
 
 /// A MISP sync server — represents a remote MISP instance for push/pull synchronisation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -93,12 +93,20 @@ pub struct MispServer {
     )]
     pub priority: Option<i64>,
 
-    /// Last pull timestamp.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// ID of the last event pulled from this server.
+    #[serde(
+        default,
+        with = "string_or_int_as_string_opt",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub lastpulledid: Option<String>,
 
-    /// Last push timestamp.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// ID of the last event pushed to this server.
+    #[serde(
+        default,
+        with = "string_or_int_as_string_opt",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub lastpushedid: Option<String>,
 }
 
@@ -208,6 +216,22 @@ mod tests {
         assert!(s.pull_galaxy_clusters);
         assert!(s.caching_enabled);
         assert!(s.self_signed);
+    }
+
+    #[test]
+    fn server_deserialize_lastid_bare_numbers() {
+        // MISP's Server model declares lastpulledid/lastpushedid as numeric
+        // columns, so the API can return them as bare JSON numbers rather
+        // than strings. A bare number must not fail the whole MispServer.
+        let json = r#"{
+            "url": "https://misp.remote.org",
+            "name": "Remote MISP",
+            "lastpulledid": 12345,
+            "lastpushedid": 6789
+        }"#;
+        let s: MispServer = serde_json::from_str(json).unwrap();
+        assert_eq!(s.lastpulledid, Some("12345".into()));
+        assert_eq!(s.lastpushedid, Some("6789".into()));
     }
 
     #[test]
