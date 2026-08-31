@@ -38,6 +38,37 @@ jobs:
       - name: Clippy lints
         run: cargo clippy --all-targets --all-features -- -D warnings
 
+  # Each feature must also compile in isolation (and with none at all) -
+  # --all-features alone can hide a feature that's broken on its own.
+  feature-checks:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-features-${{ hashFiles('Cargo.toml') }}
+          restore-keys: ${{ runner.os }}-cargo-features-
+
+      - name: Check --no-default-features
+        run: cargo check --no-default-features
+
+      - name: Check each feature in isolation
+        run: |
+          for f in blocking tools-file tools-csv tools-openioc tools-feed; do
+            echo "::group::cargo check --no-default-features --features $f"
+            cargo check --no-default-features --features "$f"
+            echo "::endgroup::"
+          done
+
   # Integration tests against a live MISP instance
   # Mirrors the MISP project's own CI setup from .github/workflows/main.yml
   integration-tests:
