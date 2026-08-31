@@ -1841,17 +1841,23 @@ async fn test_user_settings() {
 
     // Set a user setting
     let val = serde_json::json!("test-value");
-    let _ = client
+    client
         .set_user_setting("dashboard_access", &val, None)
-        .await;
+        .await
+        .expect("set_user_setting");
 
     // Get it back
-    if let Ok(s) = client.get_user_setting("dashboard_access", None).await {
-        assert_eq!(s.setting, "dashboard_access");
-    }
+    let s = client
+        .get_user_setting("dashboard_access", None)
+        .await
+        .expect("get_user_setting");
+    assert_eq!(s.setting, "dashboard_access");
 
     // Delete it
-    let _ = client.delete_user_setting("dashboard_access", None).await;
+    client
+        .delete_user_setting("dashboard_access", None)
+        .await
+        .expect("delete_user_setting");
 }
 
 // ============================================================================
