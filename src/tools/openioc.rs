@@ -49,7 +49,7 @@ pub fn load_openioc(xml_content: &str) -> MispResult<Vec<MispAttribute>> {
 
     loop {
         match reader.read_event() {
-            Ok(Event::Start(ref e) | Event::Empty(ref e)) => {
+            Ok(ref ev @ (Event::Start(ref e) | Event::Empty(ref e))) => {
                 let local_name = e.local_name();
                 let name = std::str::from_utf8(local_name.as_ref()).unwrap_or("");
 
@@ -63,7 +63,13 @@ pub fn load_openioc(xml_content: &str) -> MispResult<Vec<MispAttribute>> {
                         }
                     }
                 } else if name == "Content" {
-                    in_content = true;
+                    // A self-closed <Content/> (Event::Empty) has no matching
+                    // End event, so only arm in_content for a real Start —
+                    // otherwise the flag stays stuck true and the next
+                    // unrelated Text node gets misattributed to current_search.
+                    if matches!(ev, Event::Start(_)) {
+                        in_content = true;
+                    }
                 }
             }
             Ok(Event::Text(ref e)) if in_content => {
@@ -210,5 +216,33 @@ mod tests {
         assert_eq!(attrs.len(), 1);
         assert_eq!(attrs[0].attr_type, "ip-dst");
         assert_eq!(attrs[0].value, "10.0.0.1");
+    }
+
+    #[test]
+    fn openioc_self_closed_content_does_not_leak_into_next_text() {
+        // A self-closed <Content/> (Event::Empty) has no matching End event.
+        // Before the fix, in_content stayed true after it, so the next
+        // unrelated Text node (here, whitespace inside <Indicator>) would be
+        // fabricated into a bogus attribute under the stale current_search.
+        let xml = r#"<?xml version="1.0"?>
+<ioc>
+  <definition>
+    <Indicator operator="OR">
+      <IndicatorItem>
+        <Context search="FileItem/Md5sum"/>
+        <Content type="md5"/>
+        leaked-non-ioc-text
+      </IndicatorItem>
+      <IndicatorItem>
+        <Context search="FileItem/Sha1sum"/>
+        <Content type="sha1">da39a3ee5e6b4b0d3255bfef95601890afd80709</Content>
+      </IndicatorItem>
+    </Indicator>
+  </definition>
+</ioc>"#;
+        let attrs = load_openioc(xml).unwrap();
+        assert_eq!(attrs.len(), 1);
+        assert_eq!(attrs[0].attr_type, "sha1");
+        assert_eq!(attrs[0].value, "da39a3ee5e6b4b0d3255bfef95601890afd80709");
     }
 }
