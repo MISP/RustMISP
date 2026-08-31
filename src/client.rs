@@ -274,7 +274,11 @@ impl MispClient {
 
     /// Get a specific server setting.
     pub async fn get_server_setting(&self, setting: &str) -> MispResult<Value> {
-        self.get(&format!("servers/getSetting/{setting}")).await
+        self.get(&format!(
+            "servers/getSetting/{}",
+            encode_path_segment(setting)
+        ))
+        .await
     }
 
     /// Set a specific server setting.
@@ -284,8 +288,14 @@ impl MispClient {
         value: impl Into<Value>,
     ) -> MispResult<Value> {
         let body = serde_json::json!({ "value": value.into() });
-        self.post(&format!("servers/serverSettingsEdit/{setting}"), &body)
-            .await
+        self.post(
+            &format!(
+                "servers/serverSettingsEdit/{}",
+                encode_path_segment(setting)
+            ),
+            &body,
+        )
+        .await
     }
 
     /// Query the ACL system for debugging.
@@ -590,10 +600,11 @@ impl MispClient {
 
     /// Search tags by name.
     pub async fn search_tags(&self, name: &str, strict: bool) -> MispResult<Vec<MispTag>> {
+        let encoded_name = encode_path_segment(name);
         let path = if strict {
-            format!("tags/search/{name}/1")
+            format!("tags/search/{encoded_name}/1")
         } else {
-            format!("tags/search/{name}")
+            format!("tags/search/{encoded_name}")
         };
         let json = self.get(&path).await?;
         let arr = json
@@ -751,8 +762,11 @@ impl MispClient {
 
     /// Get a raw object template by UUID or name.
     pub async fn get_raw_object_template(&self, uuid_or_name: &str) -> MispResult<Value> {
-        self.get(&format!("objectTemplates/getRaw/{uuid_or_name}"))
-            .await
+        self.get(&format!(
+            "objectTemplates/getRaw/{}",
+            encode_path_segment(uuid_or_name)
+        ))
+        .await
     }
 
     /// Trigger an update of all object templates.
@@ -3112,6 +3126,44 @@ impl MispClient {
         )
         .await
     }
+}
+
+/// Percent-encode a value so it is safe to interpolate as a single path
+/// segment (e.g. a tag name, server setting key, or object template
+/// identifier).
+///
+/// MISP tag names routinely contain `/`, `:`, `=`, and `"`
+/// (e.g. `misp-galaxy:mitre-attack-pattern="Phishing - T1566"`), and any of
+/// those characters embedded verbatim in a path handed to `Url::join`
+/// changes the number of path segments or, in the case of a value like
+/// `../`, is resolved away by RFC 3986 dot-segment merging - silently
+/// redirecting the authenticated request to a different controller.
+/// Encoding every byte outside the RFC 3986 "unreserved" set (ALPHA / DIGIT
+/// / `-` / `.` / `_` / `~`) keeps the value confined to exactly one path
+/// segment.
+fn encode_path_segment(value: &str) -> String {
+    let mut encoded = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                encoded.push(byte as char);
+            }
+            _ => {
+                encoded.push('%');
+                encoded.push(
+                    std::char::from_digit((byte >> 4) as u32, 16)
+                        .unwrap()
+                        .to_ascii_uppercase(),
+                );
+                encoded.push(
+                    std::char::from_digit((byte & 0xf) as u32, 16)
+                        .unwrap()
+                        .to_ascii_uppercase(),
+                );
+            }
+        }
+    }
+    encoded
 }
 
 /// Ensure the URL has a trailing slash so `Url::join` works correctly.
@@ -6389,5 +6441,81 @@ mod tests {
 
         let r = client.delete_user_setting("dashboard", None).await.unwrap();
         assert_eq!(r["message"], "Setting deleted.");
+    }
+
+    // ── Path percent-encoding (F32) ──────────────────────────────────
+
+    #[tokio::test]
+    async fn search_tags_percent_encodes_slash_and_colon_in_tag_name() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        // A real MISP galaxy-cluster tag name: contains `:`, `=`, `"` and a
+        // space. Interpolated unescaped, this would change the number of
+        // path segments the CakePHP router sees.
+        let tag_name = r#"misp-galaxy:mitre-attack-pattern="Phishing - T1566""#;
+
+        Mock::given(method("GET"))
+            .and(path(
+                "/tags/search/misp-galaxy%3Amitre-attack-pattern%3D%22Phishing%20-%20T1566%22/1",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&server)
+            .await;
+
+        let result = client.search_tags(tag_name, true).await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_raw_object_template_percent_encodes_path_traversal_attempt() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        // A value containing `../` must stay confined to the
+        // `objectTemplates/getRaw/` segment instead of being resolved away
+        // by RFC 3986 dot-segment merging in `Url::join`, which would
+        // redirect the authenticated request to a different controller
+        // (e.g. `/users/view/1`).
+        let malicious = "../../users/view/1";
+
+        // If the fix were missing, `Url::join` would collapse this to
+        // `/users/view/1`; mounting only the encoded path (and nothing at
+        // `/users/view/1`) makes an un-encoded regression fail loudly with
+        // a 404 rather than silently matching the wrong endpoint.
+        Mock::given(method("GET"))
+            .and(path("/objectTemplates/getRaw/..%2F..%2Fusers%2Fview%2F1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+            .mount(&server)
+            .await;
+
+        let result = client.get_raw_object_template(malicious).await.unwrap();
+        assert_eq!(result["ok"], true);
+    }
+
+    #[tokio::test]
+    async fn get_server_setting_percent_encodes_setting_name() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/servers/getSetting/graph%3Aenabled"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"value": true})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client.get_server_setting("graph:enabled").await.unwrap();
+        assert_eq!(result["value"], true);
     }
 }
