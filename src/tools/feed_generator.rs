@@ -72,7 +72,17 @@ impl FeedGenerator {
             .clone()
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-        let event_json = serde_json::to_string(event).unwrap_or_default();
+        // Ensure the serialized event carries the same UUID as the manifest
+        // key, even when it had to be generated here because `event.uuid`
+        // was `None`. Otherwise the feed's event file disagrees with (or
+        // omits) the UUID that names it in the manifest.
+        let event_json = if event.uuid.is_none() {
+            let mut event_with_uuid = event.clone();
+            event_with_uuid.uuid = Some(uuid.clone());
+            serde_json::to_string(&event_with_uuid).unwrap_or_default()
+        } else {
+            serde_json::to_string(event).unwrap_or_default()
+        };
 
         self.events.push(FeedEntry {
             uuid,
@@ -231,6 +241,30 @@ mod tests {
 
         assert!(feed_gen.get_event_json("uuid-1").is_some());
         assert!(feed_gen.get_event_json("nonexistent").is_none());
+    }
+
+    #[test]
+    fn feed_generator_generated_uuid_matches_event_json() {
+        let mut feed_gen = FeedGenerator::new();
+        let mut event = MispEvent::new("");
+        event.uuid = None;
+        event.info = "No uuid event".to_string();
+        feed_gen.add_event(&event);
+
+        let uuids = feed_gen.event_uuids();
+        assert_eq!(uuids.len(), 1);
+        let generated_uuid = uuids[0];
+
+        // The manifest must key the entry by the same UUID as the one
+        // embedded in the event's own serialized JSON.
+        let manifest = feed_gen.generate_manifest().unwrap();
+        assert!(manifest.contains(generated_uuid));
+
+        let event_json = feed_gen.get_event_json(generated_uuid).unwrap();
+        assert!(
+            event_json.contains(generated_uuid),
+            "event_json ({event_json}) must contain the same uuid ({generated_uuid}) used as the manifest key"
+        );
     }
 
     #[test]
