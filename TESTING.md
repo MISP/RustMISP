@@ -51,11 +51,11 @@ cargo test test_event_crud_lifecycle -- --ignored
 
 ## Running the Example Scripts
 
-The `examples/` directory contains runnable scripts. Use `MISP_SSL_VERIFY`
-(not `MISP_VERIFYCERT`) for examples — they use their own env var name:
+The `examples/` directory contains runnable scripts. Use `MISP_VERIFYCERT`,
+the same env var name used by the integration tests and CI:
 
 ```bash
-export MISP_SSL_VERIFY=false   # only needed for self-signed certs
+export MISP_VERIFYCERT=false   # only needed for self-signed certs
 
 # Create an event, add attributes, tag and publish it, then clean up
 cargo run --example basic_event
@@ -88,7 +88,7 @@ use rustmisp::*;
 async fn main() -> MispResult<()> {
     let url = std::env::var("MISP_URL").expect("Set MISP_URL");
     let key = std::env::var("MISP_KEY").expect("Set MISP_KEY");
-    let ssl = std::env::var("MISP_SSL_VERIFY")
+    let ssl = std::env::var("MISP_VERIFYCERT")
         .map(|v| v != "0" && v != "false")
         .unwrap_or(true);
 
@@ -139,5 +139,5 @@ cargo run --example smoke_test
 |---|---|
 | `MISP_URL environment variable required` | Export `MISP_URL` and `MISP_KEY` |
 | `AuthError: HTTP 403` | Check that your API key is valid and has admin rights |
-| `TLS error` / certificate errors | Set `MISP_VERIFYCERT=false` (tests) or `MISP_SSL_VERIFY=false` (examples) |
+| `TLS error` / certificate errors | Set `MISP_VERIFYCERT=false` |
 | Timeouts | Verify the MISP instance is reachable at the URL you set |
