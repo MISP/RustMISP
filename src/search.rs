@@ -238,7 +238,7 @@ impl SearchParameters {
         insert_opt!(threat_level_id, "threat_level_id");
         insert_opt!(analysis);
         insert_opt!(distribution);
-        insert_opt!(sharing_group_id, "sharing_group_id");
+        insert_opt!(sharing_group_id, "sharinggroup");
         insert_opt!(object_relation, "object_relation");
         insert_opt!(comment);
         insert_opt!(first_seen);
@@ -926,6 +926,19 @@ mod tests {
             SearchController::Objects.rest_search_path(),
             "objects/restSearch"
         );
+    }
+
+    #[test]
+    fn search_builder_sharing_group_id_serializes_as_sharinggroup() {
+        // PyMISP's restSearch builds query['sharinggroup'] (pymisp/api.py:3068),
+        // not 'sharing_group_id' - MISP's restSearch controller only reads the
+        // 'sharinggroup' key, so the wrong key silently drops the filter.
+        let params = SearchBuilder::new().sharing_group_id(42).build();
+        let json = params.to_json();
+        let obj = json.as_object().unwrap();
+
+        assert_eq!(obj["sharinggroup"], 42);
+        assert!(!obj.contains_key("sharing_group_id"));
     }
 
     #[test]
