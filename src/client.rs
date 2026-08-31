@@ -486,7 +486,7 @@ impl MispClient {
     /// Delete an attribute by ID. If `hard` is true, permanently remove it.
     pub async fn delete_attribute(&self, id: i64, hard: bool) -> MispResult<Value> {
         let body = if hard {
-            serde_json::json!({ "hard_delete": 1 })
+            serde_json::json!({ "hard": 1 })
         } else {
             serde_json::json!({})
         };
@@ -3674,7 +3674,7 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path("/attributes/delete/50"))
-            .and(body_partial_json(serde_json::json!({"hard_delete": 1})))
+            .and(body_partial_json(serde_json::json!({"hard": 1})))
             .respond_with(
                 ResponseTemplate::new(200)
                     .set_body_json(serde_json::json!({"message": "Attribute deleted."})),

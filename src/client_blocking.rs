@@ -2033,7 +2033,7 @@ mod tests {
         env.mount(
             Mock::given(method("POST"))
                 .and(path("/attributes/delete/50"))
-                .and(body_partial_json(serde_json::json!({"hard_delete": 1})))
+                .and(body_partial_json(serde_json::json!({"hard": 1})))
                 .respond_with(
                     ResponseTemplate::new(200)
                         .set_body_json(serde_json::json!({"message": "Attribute deleted."})),
