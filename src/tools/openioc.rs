@@ -39,6 +39,23 @@ fn openioc_to_misp_type(search: &str) -> Option<&'static str> {
     }
 }
 
+/// Build a MISP attribute from a Content node's search term and decoded value,
+/// pushing it onto `attributes` if the search term maps to a known type.
+fn push_openioc_attribute(attributes: &mut Vec<MispAttribute>, search: &str, value: &str) {
+    if value.is_empty() {
+        return;
+    }
+    if let Some(misp_type) = openioc_to_misp_type(search) {
+        let category = validation::get_default_category(misp_type).unwrap_or("Other");
+        let to_ids = validation::get_default_to_ids(misp_type).unwrap_or(true);
+
+        let mut attr = MispAttribute::new(misp_type, category, value);
+        attr.to_ids = to_ids;
+        attr.comment = format!("OpenIOC: {search}");
+        attributes.push(attr);
+    }
+}
+
 /// Load MISP attributes from an OpenIOC XML string.
 pub fn load_openioc(xml_content: &str) -> MispResult<Vec<MispAttribute>> {
     let mut reader = Reader::from_str(xml_content);
@@ -67,20 +84,21 @@ pub fn load_openioc(xml_content: &str) -> MispResult<Vec<MispAttribute>> {
                 }
             }
             Ok(Event::Text(ref e)) if in_content => {
-                if let Some(ref search) = current_search {
-                    let value = e.unescape().unwrap_or_default().trim().to_string();
-                    if !value.is_empty() {
-                        if let Some(misp_type) = openioc_to_misp_type(search) {
-                            let category =
-                                validation::get_default_category(misp_type).unwrap_or("Other");
-                            let to_ids = validation::get_default_to_ids(misp_type).unwrap_or(true);
-
-                            let mut attr = MispAttribute::new(misp_type, category, &value);
-                            attr.to_ids = to_ids;
-                            attr.comment = format!("OpenIOC: {search}");
-                            attributes.push(attr);
-                        }
+                let value = e.unescape().unwrap_or_default().trim().to_string();
+                if !value.is_empty() {
+                    if let Some(ref search) = current_search {
+                        push_openioc_attribute(&mut attributes, search, &value);
                     }
+                    in_content = false;
+                }
+                // A whitespace-only Text event (common between a Content tag
+                // and a pretty-printed CDATA section) leaves in_content set
+                // so the CData event that follows is still handled.
+            }
+            Ok(Event::CData(ref e)) if in_content => {
+                if let Some(ref search) = current_search {
+                    let value = e.decode().map(|s| s.trim().to_string()).unwrap_or_default();
+                    push_openioc_attribute(&mut attributes, search, &value);
                 }
                 in_content = false;
             }
@@ -191,6 +209,47 @@ mod tests {
 </ioc>"#;
         let attrs = load_openioc(xml).unwrap();
         assert!(attrs.is_empty());
+    }
+
+    #[test]
+    fn openioc_cdata_content() {
+        // Mandiant/OpenIOC exports routinely wrap Content values in CDATA
+        // sections. Before the fix, Event::CData fell into the catch-all
+        // arm: no attribute was produced, no error was raised, and
+        // `in_content` was left `true`.
+        let xml = r#"<?xml version="1.0"?>
+<ioc>
+  <definition>
+    <Indicator operator="OR">
+      <IndicatorItem>
+        <Context search="FileItem/Md5sum"/>
+        <Content type="md5"><![CDATA[d41d8cd98f00b204e9800998ecf8427e]]></Content>
+      </IndicatorItem>
+      <IndicatorItem>
+        <Context search="FileItem/FileName"/>
+        <Content type="string"><![CDATA[malware.exe]]></Content>
+      </IndicatorItem>
+    </Indicator>
+  </definition>
+</ioc>"#;
+        let attrs = load_openioc(xml).unwrap();
+        assert_eq!(attrs.len(), 2);
+        assert_eq!(attrs[0].attr_type, "md5");
+        assert_eq!(attrs[0].value, "d41d8cd98f00b204e9800998ecf8427e");
+        assert_eq!(attrs[1].attr_type, "filename");
+        assert_eq!(attrs[1].value, "malware.exe");
+    }
+
+    #[test]
+    fn openioc_cdata_content_pretty_printed() {
+        // Pretty-printed exports put whitespace between <Content> and the
+        // CDATA section, which the XML reader surfaces as a separate,
+        // whitespace-only Text event before the CData event.
+        let xml = "<?xml version=\"1.0\"?>\n<ioc>\n  <definition>\n    <Indicator operator=\"OR\">\n      <IndicatorItem>\n        <Context search=\"FileItem/Md5sum\"/>\n        <Content type=\"md5\">\n          <![CDATA[d41d8cd98f00b204e9800998ecf8427e]]>\n        </Content>\n      </IndicatorItem>\n    </Indicator>\n  </definition>\n</ioc>";
+        let attrs = load_openioc(xml).unwrap();
+        assert_eq!(attrs.len(), 1);
+        assert_eq!(attrs[0].attr_type, "md5");
+        assert_eq!(attrs[0].value, "d41d8cd98f00b204e9800998ecf8427e");
     }
 
     #[test]
