@@ -870,17 +870,20 @@ async fn test_search_publish_and_metadata() {
         .search(SearchController::Events, &params)
         .await
         .expect("metadata search");
-    if let Some(arr) = results.get("response").and_then(|r| r.as_array()) {
-        for ev in arr {
-            let attrs = ev
-                .get("Event")
-                .and_then(|e| e.get("Attribute"))
-                .and_then(|a| a.as_array());
-            assert!(
-                attrs.is_none_or(|a| a.is_empty()),
-                "metadata=true should return no attributes"
-            );
-        }
+    let arr = results
+        .get("response")
+        .and_then(|r| r.as_array())
+        .expect("metadata search response should be an array");
+    assert!(!arr.is_empty(), "metadata search should return ev1");
+    for ev in arr {
+        let attrs = ev
+            .get("Event")
+            .and_then(|e| e.get("Attribute"))
+            .and_then(|a| a.as_array());
+        assert!(
+            attrs.is_none_or(|a| a.is_empty()),
+            "metadata=true should return no attributes"
+        );
     }
 
     // Search unpublished
