@@ -1383,19 +1383,29 @@ impl MispClient {
     }
 
     /// Enable a noticelist by ID.
+    ///
+    /// Uses the explicit `enableNoticelist/{id}/true` action rather than
+    /// `toggleEnable/{id}`, which always flips the current state regardless
+    /// of the request body and would make `enable`/`disable` behaviourally
+    /// identical.
     pub async fn enable_noticelist(&self, id: i64) -> MispResult<Value> {
         self.post(
-            &format!("noticelists/toggleEnable/{id}"),
-            &serde_json::json!({ "Noticelist": { "enabled": true } }),
+            &format!("noticelists/enableNoticelist/{id}/true"),
+            &serde_json::json!({}),
         )
         .await
     }
 
     /// Disable a noticelist by ID.
+    ///
+    /// The trailing `enable` segment is omitted (rather than passed as the
+    /// literal string `false`), matching PyMISP: in the controller,
+    /// `enableNoticelist($id, $enable = false)` defaults to `false`, but a
+    /// non-empty URL segment `"false"` would evaluate truthy in PHP.
     pub async fn disable_noticelist(&self, id: i64) -> MispResult<Value> {
         self.post(
-            &format!("noticelists/toggleEnable/{id}"),
-            &serde_json::json!({ "Noticelist": { "enabled": false } }),
+            &format!("noticelists/enableNoticelist/{id}"),
+            &serde_json::json!({}),
         )
         .await
     }
@@ -4906,14 +4916,19 @@ mod tests {
 
     #[tokio::test]
     async fn enable_noticelist_posts() {
-        use wiremock::matchers::{method, path};
+        use wiremock::matchers::{body_json, method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
         let server = MockServer::start().await;
         let client = MispClient::new(server.uri(), "key", false).unwrap();
 
+        // MISP's NoticelistsController::toggleEnable always flips the
+        // stored state and ignores the request body, so enable/disable
+        // must instead hit the explicit enableNoticelist/{id}/{enable}
+        // action (per PyMISP's enable_noticelist/disable_noticelist).
         Mock::given(method("POST"))
-            .and(path("/noticelists/toggleEnable/5"))
+            .and(path("/noticelists/enableNoticelist/5/true"))
+            .and(body_json(serde_json::json!({})))
             .respond_with(
                 ResponseTemplate::new(200)
                     .set_body_json(serde_json::json!({"message": "Noticelist enabled."})),
@@ -4927,14 +4942,18 @@ mod tests {
 
     #[tokio::test]
     async fn disable_noticelist_posts() {
-        use wiremock::matchers::{method, path};
+        use wiremock::matchers::{body_json, method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
         let server = MockServer::start().await;
         let client = MispClient::new(server.uri(), "key", false).unwrap();
 
+        // Disable omits the trailing `enable` segment entirely (rather than
+        // passing the literal string "false", which PHP would treat as
+        // truthy), matching PyMISP's disable_noticelist call.
         Mock::given(method("POST"))
-            .and(path("/noticelists/toggleEnable/5"))
+            .and(path("/noticelists/enableNoticelist/5"))
+            .and(body_json(serde_json::json!({})))
             .respond_with(
                 ResponseTemplate::new(200)
                     .set_body_json(serde_json::json!({"message": "Noticelist disabled."})),
