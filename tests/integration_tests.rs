@@ -1584,23 +1584,38 @@ async fn test_taxonomy_operations() {
     assert_eq!(fetched.id, Some(tax_id));
     let was_enabled = fetched.enabled;
 
-    // Enable then disable — restore original state afterward
-    client
-        .enable_taxonomy(tax_id)
-        .await
-        .expect("enable_taxonomy");
-    client
-        .disable_taxonomy(tax_id)
-        .await
-        .expect("disable_taxonomy");
+    // Enable then disable — run on a spawned task so a panic here is caught by
+    // the JoinHandle instead of unwinding straight past the restoration below,
+    // which would otherwise leave shared state mutated for every later test.
+    let toggle_client = client.clone();
+    let toggle_result = tokio::spawn(async move {
+        toggle_client
+            .enable_taxonomy(tax_id)
+            .await
+            .expect("enable_taxonomy");
+        toggle_client
+            .disable_taxonomy(tax_id)
+            .await
+            .expect("disable_taxonomy");
+    })
+    .await;
 
-    // Restore original state
+    // Restore original state — runs regardless of whether the toggle above panicked,
+    // and covers both directions so a panic between enable and disable (which leaves
+    // the taxonomy enabled) is corrected even when it was originally disabled.
     if was_enabled {
         client
             .enable_taxonomy(tax_id)
             .await
             .expect("restore taxonomy");
+    } else {
+        client
+            .disable_taxonomy(tax_id)
+            .await
+            .expect("restore taxonomy");
     }
+
+    toggle_result.expect("enable/disable taxonomy panicked");
 }
 
 // ============================================================================
@@ -1627,17 +1642,38 @@ async fn test_warninglist_operations() {
     assert_eq!(fetched.id, Some(wl_id));
     let was_enabled = fetched.enabled;
 
-    // Enable then disable — restore original state afterward
-    client.enable_warninglist(wl_id).await.expect("enable");
-    client.disable_warninglist(wl_id).await.expect("disable");
+    // Enable then disable — run on a spawned task so a panic here is caught by
+    // the JoinHandle instead of unwinding straight past the restoration below,
+    // which would otherwise leave shared state mutated for every later test.
+    let toggle_client = client.clone();
+    let toggle_result = tokio::spawn(async move {
+        toggle_client
+            .enable_warninglist(wl_id)
+            .await
+            .expect("enable");
+        toggle_client
+            .disable_warninglist(wl_id)
+            .await
+            .expect("disable");
+    })
+    .await;
 
-    // Restore original state
+    // Restore original state — runs regardless of whether the toggle above panicked,
+    // and covers both directions so a panic between enable and disable (which leaves
+    // the warninglist enabled) is corrected even when it was originally disabled.
     if was_enabled {
         client
             .enable_warninglist(wl_id)
             .await
             .expect("restore warninglist");
+    } else {
+        client
+            .disable_warninglist(wl_id)
+            .await
+            .expect("restore warninglist");
     }
+
+    toggle_result.expect("enable/disable warninglist panicked");
 
     // Check values in warninglist
     let result = client
@@ -1690,12 +1726,22 @@ async fn test_role_operations() {
     // Set default role (then restore)
     let original_default = roles.iter().find(|r| r.default_role);
     let user_role_id = user_role.unwrap().id.unwrap();
-    client
-        .set_default_role(user_role_id)
-        .await
-        .expect("set_default_role");
 
-    // Restore if we had a different default
+    // Run the mutation on a spawned task so a panic here is caught by the
+    // JoinHandle instead of unwinding straight past the restoration below,
+    // which would otherwise leave the site-wide default role changed for
+    // every later test.
+    let set_client = client.clone();
+    let set_result = tokio::spawn(async move {
+        set_client
+            .set_default_role(user_role_id)
+            .await
+            .expect("set_default_role");
+    })
+    .await;
+
+    // Restore if we had a different default — runs regardless of whether the
+    // set_default_role call above panicked.
     if let Some(orig) = original_default {
         if orig.id != Some(user_role_id) {
             client
@@ -1704,6 +1750,8 @@ async fn test_role_operations() {
                 .expect("restore default");
         }
     }
+
+    set_result.expect("set_default_role panicked");
 }
 
 // ============================================================================
