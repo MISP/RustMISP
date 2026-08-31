@@ -307,6 +307,7 @@ jobs:
   # Update PyMISP parity badges in README (push to main only)
   parity-badges:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [unit-tests, integration-tests]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
