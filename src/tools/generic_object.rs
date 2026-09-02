@@ -272,12 +272,25 @@ mod tests {
     }
 
     #[test]
-    fn generic_object_unknown_type_defaults_to_other() {
-        let obj = GenericObjectGenerator::new("custom")
+    fn generic_object_unknown_relation_is_rejected() {
+        // Previously this defaulted the attribute type to the object_relation
+        // verbatim and the category to "Other", emitting an object MISP would
+        // reject at save time. An unknown relation is now refused up front.
+        let result = GenericObjectGenerator::new("custom")
             .add_attribute("custom-field", "value")
+            .generate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generic_object_valid_type_without_category_defaults_to_other() {
+        // The "default the category to Other" behaviour still holds for a
+        // relation that IS a valid MISP attribute type.
+        let obj = GenericObjectGenerator::new("custom")
+            .add_attribute("comment", "value")
             .generate()
             .unwrap();
-        // Unknown type should default to "Other" category
+        assert_eq!(obj.attributes[0].attr_type, "comment");
         assert_eq!(obj.attributes[0].category, "Other");
         assert!(!obj.attributes[0].to_ids);
     }
