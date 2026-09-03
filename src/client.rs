@@ -2778,7 +2778,7 @@ impl MispClient {
             body.insert("sharing_group_id".into(), serde_json::json!(sg));
         }
         self.post(
-            &format!("attributes/freeTextImport/{event_id}"),
+            &format!("events/freeTextImport/{event_id}"),
             &Value::Object(body),
         )
         .await
@@ -6389,5 +6389,39 @@ mod tests {
 
         let r = client.delete_user_setting("dashboard", None).await.unwrap();
         assert_eq!(r["message"], "Setting deleted.");
+    }
+
+    #[tokio::test]
+    async fn freetext_posts_to_events_endpoint() {
+        // MISP implements freeTextImport on EventsController, not
+        // AttributesController: app/Controller/EventsController.php
+        // `public function freeTextImport($id, ...)`, routed at
+        // 'events/freeTextImport/' . $id. PyMISP posts to the same path
+        // (pymisp/api.py: f'events/freeTextImport/{event_id}').
+        use wiremock::matchers::{body_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/events/freeTextImport/42"))
+            .and(body_json(serde_json::json!({
+                "value": "1.2.3.4",
+                "adhereToWarninglists": true,
+                "distribution": 1
+            })))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!([{"type": "ip-dst", "value": "1.2.3.4"}])),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client
+            .freetext(42, "1.2.3.4", Some(true), Some(1), None)
+            .await
+            .unwrap();
+        assert_eq!(result[0]["value"], "1.2.3.4");
     }
 }
