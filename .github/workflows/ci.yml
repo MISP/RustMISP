@@ -288,7 +288,7 @@ jobs:
           MISP_URL: http://localhost
           MISP_KEY: ${{ env.AUTH }}
           MISP_VERIFYCERT: "false"
-        run: cargo test -- --ignored
+        run: cargo test --test integration_tests -- --ignored
 
       # ── Diagnostics on failure ──────────────────────────────────────
 
