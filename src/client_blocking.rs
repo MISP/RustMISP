@@ -514,10 +514,18 @@ impl MispClientBlocking {
         self.rt.block_on(self.inner.get_analyst_data(data_type, id))
     }
 
-    /// Add analyst data (note, opinion, or relationship).
-    pub fn add_analyst_data(&self, data_type: AnalystDataType, data: &Value) -> MispResult<Value> {
-        self.rt
-            .block_on(self.inner.add_analyst_data(data_type, data))
+    /// Add analyst data (note, opinion, or relationship) to a target object.
+    pub fn add_analyst_data(
+        &self,
+        data_type: AnalystDataType,
+        object_uuid: &str,
+        object_type: &str,
+        data: &Value,
+    ) -> MispResult<Value> {
+        self.rt.block_on(
+            self.inner
+                .add_analyst_data(data_type, object_uuid, object_type, data),
+        )
     }
 
     /// Update existing analyst data.

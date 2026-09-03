@@ -1000,17 +1000,29 @@ impl MispClient {
         Ok(json)
     }
 
-    /// Add analyst data (note, opinion, or relationship).
+    /// Add analyst data (note, opinion, or relationship) to a target object.
     ///
-    /// The `data_type` parameter selects the endpoint, and `data` is the
-    /// JSON body to send.
+    /// The `data_type` parameter selects the endpoint, `object_uuid`/`object_type`
+    /// identify the MISP object (event, attribute, object, ...) that the analyst
+    /// data is attached to, and `data` is the JSON body to send. MISP's
+    /// `AnalystDataController::add($type, $object_uuid, $object_type)` requires
+    /// the target to be given as path arguments in that order; omitting them
+    /// creates the note/opinion/relationship with no target object.
     pub async fn add_analyst_data(
         &self,
         data_type: AnalystDataType,
+        object_uuid: &str,
+        object_type: &str,
         data: &Value,
     ) -> MispResult<Value> {
-        self.post(&format!("analystData/add/{}", data_type.as_str()), data)
-            .await
+        self.post(
+            &format!(
+                "analystData/add/{}/{object_uuid}/{object_type}",
+                data_type.as_str()
+            ),
+            data,
+        )
+        .await
     }
 
     /// Update existing analyst data.
@@ -1053,8 +1065,21 @@ impl MispClient {
 
     /// Add a note.
     pub async fn add_note(&self, note: &MispNote) -> MispResult<MispNote> {
+        let object_uuid = note
+            .object_uuid
+            .as_deref()
+            .ok_or_else(|| MispError::MissingField("object_uuid".into()))?;
+        let object_type = note
+            .object_type
+            .as_deref()
+            .ok_or_else(|| MispError::MissingField("object_type".into()))?;
         let body = serde_json::to_value(note)?;
-        let json = self.post("analystData/add/Note", &body).await?;
+        let json = self
+            .post(
+                &format!("analystData/add/Note/{object_uuid}/{object_type}"),
+                &body,
+            )
+            .await?;
         let val = if json.get("Note").is_some() {
             &json["Note"]
         } else {
@@ -1102,8 +1127,21 @@ impl MispClient {
 
     /// Add an opinion.
     pub async fn add_opinion(&self, opinion: &MispOpinion) -> MispResult<MispOpinion> {
+        let object_uuid = opinion
+            .object_uuid
+            .as_deref()
+            .ok_or_else(|| MispError::MissingField("object_uuid".into()))?;
+        let object_type = opinion
+            .object_type
+            .as_deref()
+            .ok_or_else(|| MispError::MissingField("object_type".into()))?;
         let body = serde_json::to_value(opinion)?;
-        let json = self.post("analystData/add/Opinion", &body).await?;
+        let json = self
+            .post(
+                &format!("analystData/add/Opinion/{object_uuid}/{object_type}"),
+                &body,
+            )
+            .await?;
         let val = if json.get("Opinion").is_some() {
             &json["Opinion"]
         } else {
@@ -1156,8 +1194,21 @@ impl MispClient {
         &self,
         relationship: &MispRelationship,
     ) -> MispResult<MispRelationship> {
+        let object_uuid = relationship
+            .object_uuid
+            .as_deref()
+            .ok_or_else(|| MispError::MissingField("object_uuid".into()))?;
+        let object_type = relationship
+            .object_type
+            .as_deref()
+            .ok_or_else(|| MispError::MissingField("object_type".into()))?;
         let body = serde_json::to_value(relationship)?;
-        let json = self.post("analystData/add/Relationship", &body).await?;
+        let json = self
+            .post(
+                &format!("analystData/add/Relationship/{object_uuid}/{object_type}"),
+                &body,
+            )
+            .await?;
         let val = if json.get("Relationship").is_some() {
             &json["Relationship"]
         } else {
@@ -6389,5 +6440,88 @@ mod tests {
 
         let r = client.delete_user_setting("dashboard", None).await.unwrap();
         assert_eq!(r["message"], "Setting deleted.");
+    }
+
+    // ── Analyst Data add path/body tests ───────────────────────────────
+    // MISP's AnalystDataController::add($type, $object_uuid, $object_type)
+    // requires the target object to be given as path arguments in that
+    // order (app/Controller/AnalystDataController.php:43); posting to
+    // analystData/add/{type} alone creates the note/opinion/relationship
+    // with no target object.
+
+    #[tokio::test]
+    async fn add_analyst_data_includes_object_path_args() {
+        use wiremock::matchers::{body_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        let body = serde_json::json!({"note": "test"});
+
+        Mock::given(method("POST"))
+            .and(path(
+                "/analystData/add/Note/550e8400-e29b-41d4-a716-446655440000/Event",
+            ))
+            .and(body_json(&body))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"Note": {"id": "1"}})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client
+            .add_analyst_data(
+                AnalystDataType::Note,
+                "550e8400-e29b-41d4-a716-446655440000",
+                "Event",
+                &body,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result["Note"]["id"], "1");
+    }
+
+    #[tokio::test]
+    async fn add_note_includes_object_path_args() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        let response = serde_json::json!({
+            "Note": {
+                "id": "1",
+                "note": "hello",
+                "object_uuid": "550e8400-e29b-41d4-a716-446655440000",
+                "object_type": "Event"
+            }
+        });
+
+        Mock::given(method("POST"))
+            .and(path(
+                "/analystData/add/Note/550e8400-e29b-41d4-a716-446655440000/Event",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&response))
+            .mount(&server)
+            .await;
+
+        let mut note = MispNote::new("hello");
+        note.object_uuid = Some("550e8400-e29b-41d4-a716-446655440000".to_string());
+        note.object_type = Some("Event".to_string());
+
+        let created = client.add_note(&note).await.unwrap();
+        assert_eq!(created.id, Some(1));
+    }
+
+    #[tokio::test]
+    async fn add_note_without_object_uuid_errors() {
+        let server = wiremock::MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        let note = MispNote::new("hello");
+        let result = client.add_note(&note).await;
+        assert!(result.is_err());
     }
 }
