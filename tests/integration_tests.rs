@@ -45,6 +45,24 @@ fn unique(label: &str) -> String {
     format!("RustMISP Test - {} - {}", label, uuid::Uuid::new_v4())
 }
 
+/// Wait until an event actually reports `published`.
+///
+/// CI runs MISP with SimpleBackgroundJobs and supervisor workers enabled, so
+/// `EventsController::publish()` hands the work to `publishRouter()` and returns
+/// "Job queued" immediately -- the `published` flag is set later by a worker.
+/// Searching straight after `publish()` therefore races that worker.
+async fn wait_until_published(client: &MispClient, event_id: i64) {
+    for _ in 0..60 {
+        if let Ok(ev) = client.get_event(event_id).await {
+            if ev.published {
+                return;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+    panic!("event {event_id} was not published within 30s (background worker stuck?)");
+}
+
 /// Random octet for generating unique IPs in tests.
 fn rand_octet() -> u8 {
     (now_ts() as u8).wrapping_add(uuid::Uuid::new_v4().as_bytes()[0])
@@ -899,6 +917,7 @@ async fn test_search_publish_and_metadata() {
 
     // Publish ev1, then search published only
     client.publish(ev1_id, false).await.expect("publish");
+    wait_until_published(&client, ev1_id).await;
     let params = SearchParameters {
         timestamp: Some(Value::from(ts)),
         published: Some(true),
