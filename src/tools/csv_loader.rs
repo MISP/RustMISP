@@ -37,6 +37,12 @@ impl CsvLoader {
     }
 
     /// Load attributes from a CSV string.
+    ///
+    /// Each row is validated independently: a malformed or invalid row (bad
+    /// type, unknown category, or a type/category pair the MISP server would
+    /// reject) is skipped and logged via `log::warn!` rather than aborting
+    /// the whole import. An error is only returned when every attempted row
+    /// failed, or the CSV structure itself is invalid (missing headers).
     pub fn from_string(csv_content: &str) -> MispResult<Vec<MispAttribute>> {
         let mut reader = csv::ReaderBuilder::new()
             .flexible(true)
@@ -62,11 +68,18 @@ impl CsvLoader {
         })?;
 
         let mut attributes = Vec::new();
+        let mut row_errors: Vec<String> = Vec::new();
 
         for (row_num, result) in reader.records().enumerate() {
-            let record = result.map_err(|e| {
-                MispError::InvalidInput(format!("CSV parse error at row {}: {e}", row_num + 2))
-            })?;
+            let record = match result {
+                Ok(record) => record,
+                Err(e) => {
+                    let msg = format!("CSV parse error at row {}: {e}", row_num + 2);
+                    log::warn!("{msg}");
+                    row_errors.push(msg);
+                    continue;
+                }
+            };
 
             let attr_type = record.get(type_idx).unwrap_or("").trim();
             let value = record.get(value_idx).unwrap_or("").trim();
@@ -75,23 +88,28 @@ impl CsvLoader {
                 continue;
             }
 
-            // Validate type
-            validation::validate_type(attr_type)?;
-
             let category = category_idx
                 .and_then(|i| record.get(i))
                 .map(|s| s.trim())
                 .filter(|s| !s.is_empty());
 
             let category = match category {
-                Some(c) => {
-                    validation::validate_category(c)?;
-                    c.to_string()
-                }
+                Some(c) => c.to_string(),
                 None => validation::get_default_category(attr_type)
                     .unwrap_or("Other")
                     .to_string(),
             };
+
+            // Validate the type/category pair together (not independently):
+            // the MISP server rejects a syntactically valid type paired with
+            // a syntactically valid category that doesn't allow it (e.g.
+            // type=md5, category=Person).
+            if let Err(e) = validation::validate_type_category_pair(attr_type, &category) {
+                let msg = format!("Row {}: {e}", row_num + 2);
+                log::warn!("{msg}");
+                row_errors.push(msg);
+                continue;
+            }
 
             let comment = comment_idx
                 .and_then(|i| record.get(i))
@@ -107,6 +125,10 @@ impl CsvLoader {
             attr.comment = comment;
             attr.to_ids = to_ids;
             attributes.push(attr);
+        }
+
+        if attributes.is_empty() && !row_errors.is_empty() {
+            return Err(MispError::InvalidInput(row_errors.join("; ")));
         }
 
         Ok(attributes)
@@ -156,6 +178,35 @@ mod tests {
     fn csv_invalid_category() {
         let csv = "type,value,category\nmd5,abc123,Fake category\n";
         assert!(CsvLoader::from_string(csv).is_err());
+    }
+
+    #[test]
+    fn csv_rejects_mismatched_type_category_pair() {
+        // Both `md5` and `Person` are individually valid, but MISP's
+        // categoryDefinitions do not allow `md5` under `Person`
+        // (see app/Model/MispAttribute.php categoryDefinitions[...]['types']
+        // and the pair check at line ~997-998 in the pinned MISP checkout).
+        // Before the fix, type and category were validated independently
+        // and this row was accepted; the server would then reject it.
+        let csv = "type,value,category\nmd5,d41d8cd98f00b204e9800998ecf8427e,Person\n";
+        let err = CsvLoader::from_string(csv).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("not valid for category"),
+            "unexpected error message: {msg}"
+        );
+    }
+
+    #[test]
+    fn csv_skips_bad_rows_but_keeps_good_ones() {
+        // Before the fix, a single malformed row aborted the whole import
+        // and every successfully parsed row before it was discarded. Now
+        // the bad row is skipped and the good row is still returned.
+        let csv = "type,value\nmd5,d41d8cd98f00b204e9800998ecf8427e\nnot-a-real-type,somevalue\n";
+        let attrs = CsvLoader::from_string(csv).unwrap();
+        assert_eq!(attrs.len(), 1);
+        assert_eq!(attrs[0].attr_type, "md5");
+        assert_eq!(attrs[0].value, "d41d8cd98f00b204e9800998ecf8427e");
     }
 
     #[test]
