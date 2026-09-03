@@ -954,6 +954,11 @@ impl MispClientBlocking {
         self.rt.block_on(self.inner.get_user(id))
     }
 
+    /// Get the currently authenticated user (the owner of the API key in use).
+    pub fn get_user_me(&self) -> MispResult<MispUser> {
+        self.rt.block_on(self.inner.get_user_me())
+    }
+
     /// Reset and return a new API auth key for a user.
     pub fn get_new_authkey(&self, user_id: i64) -> MispResult<String> {
         self.rt.block_on(self.inner.get_new_authkey(user_id))
