@@ -2628,9 +2628,11 @@ impl MispClient {
     /// * `type_sighting` - Optional sighting type (0=sighting, 1=false positive, 2=expiration)
     /// * `date_from` - Optional start date
     /// * `date_to` - Optional end date
-    /// * `publish_timestamp` - Optional publish timestamp filter
-    /// * `last` - Optional relative timestamp (e.g. "5d")
-    /// * `org` - Optional organisation filter
+    /// * `publish_timestamp` - Optional publish timestamp filter (canonical; takes
+    ///   precedence over `last` if both are given, matching PyMISP's `publish_timestamp`)
+    /// * `last` - Deprecated synonym for `publish_timestamp` (e.g. "5d"); only used as a
+    ///   fallback when `publish_timestamp` is not set
+    /// * `org` - Optional organisation filter (sent as `org_id`, matching the Sighting model)
     #[allow(clippy::too_many_arguments)]
     pub async fn search_sightings(
         &self,
@@ -2658,14 +2660,11 @@ impl MispClient {
         if let Some(dt) = date_to {
             body.insert("to".into(), serde_json::json!(dt));
         }
-        if let Some(pt) = publish_timestamp {
-            body.insert("last".into(), serde_json::json!(pt));
-        }
-        if let Some(l) = last {
-            body.insert("last".into(), serde_json::json!(l));
+        if let Some(v) = publish_timestamp.or(last) {
+            body.insert("last".into(), serde_json::json!(v));
         }
         if let Some(o) = org {
-            body.insert("org".into(), serde_json::json!(o));
+            body.insert("org_id".into(), serde_json::json!(o));
         }
         let path = format!("sightings/restSearch/{context}/{id}");
         self.post(&path, &Value::Object(body)).await
@@ -3509,6 +3508,43 @@ mod tests {
 
         // update_event requires id
         event.id = Some(99);
+    }
+
+    #[tokio::test]
+    async fn search_sightings_sends_org_id_and_prefers_publish_timestamp() {
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        // MISP's Sighting::restSearch only understands `org_id` (not `org`), and only a
+        // single `last` timestamp key: publish_timestamp is the canonical parameter and
+        // must win when both publish_timestamp and the deprecated `last` are supplied.
+        Mock::given(method("POST"))
+            .and(path("/sightings/restSearch/attribute/42"))
+            .and(body_partial_json(serde_json::json!({
+                "org_id": "3",
+                "last": "publish-ts-value"
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&server)
+            .await;
+
+        let result = client
+            .search_sightings(
+                "attribute",
+                42,
+                None,
+                None,
+                None,
+                None,
+                Some("publish-ts-value"),
+                Some("5d"),
+                Some("3"),
+            )
+            .await;
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
