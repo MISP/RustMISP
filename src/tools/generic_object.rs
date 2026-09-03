@@ -17,7 +17,7 @@ use super::MispObjectGenerator;
 ///
 /// let obj = GenericObjectGenerator::new("domain-ip")
 ///     .add_attribute("domain", "example.com")
-///     .add_attribute("ip", "1.2.3.4")
+///     .add_attribute_full("ip", "ip-dst", "Network activity", "1.2.3.4")
 ///     .generate()
 ///     .unwrap();
 ///
@@ -66,7 +66,12 @@ impl GenericObjectGenerator {
     /// Add an attribute with the given object relation and value.
     ///
     /// The attribute type defaults to the object relation name, and the
-    /// category is looked up from `describeTypes.json` sane defaults.
+    /// category is looked up from `describeTypes.json` sane defaults. Note
+    /// that the object relation is frequently *not* a valid MISP attribute
+    /// type (e.g. the `domain-ip` template's `ip` relation maps to type
+    /// `ip-dst`); when no default lookup applies, `generate()` will reject
+    /// the resulting type rather than emit an invalid attribute. Use
+    /// [`Self::add_attribute_full`] to supply the correct type explicitly.
     pub fn add_attribute(
         mut self,
         object_relation: impl Into<String>,
@@ -143,6 +148,11 @@ impl MispObjectGenerator for GenericObjectGenerator {
 
         for entry in &self.attributes {
             let attr_type = entry.attr_type.as_deref().unwrap_or(&entry.object_relation);
+            // MISP rejects attributes whose type is not a known attribute
+            // type (see MispAttribute::beforeValidate in MISP core), so we
+            // must not silently emit the object relation verbatim as the
+            // type when it isn't one.
+            validation::validate_type(attr_type)?;
             let category = match &entry.category {
                 Some(c) => c.clone(),
                 None => validation::get_default_category(attr_type)
@@ -184,7 +194,7 @@ mod tests {
     fn generic_object_basic() {
         let obj = GenericObjectGenerator::new("domain-ip")
             .add_attribute("domain", "example.com")
-            .add_attribute("ip", "1.2.3.4")
+            .add_attribute_full("ip", "ip-dst", "Network activity", "1.2.3.4")
             .generate()
             .unwrap();
         assert_eq!(obj.name, "domain-ip");
@@ -192,7 +202,23 @@ mod tests {
         assert_eq!(obj.attributes[0].object_relation.as_deref(), Some("domain"));
         assert_eq!(obj.attributes[0].value, "example.com");
         assert_eq!(obj.attributes[1].object_relation.as_deref(), Some("ip"));
+        assert_eq!(obj.attributes[1].attr_type, "ip-dst");
         assert_eq!(obj.attributes[1].value, "1.2.3.4");
+    }
+
+    /// The `domain-ip` object template's `ip` relation maps to attribute
+    /// type `ip-dst`, not `ip` (which is not a valid MISP attribute type at
+    /// all). Falling back to the object relation verbatim as the type must
+    /// be rejected rather than silently produce an object MISP would refuse
+    /// (MispAttribute::beforeValidate in MISP core treats an unknown type as
+    /// a validation error).
+    #[test]
+    fn generic_object_rejects_invalid_default_type() {
+        let result = GenericObjectGenerator::new("domain-ip")
+            .add_attribute("domain", "example.com")
+            .add_attribute("ip", "1.2.3.4")
+            .generate();
+        assert!(result.is_err());
     }
 
     #[test]
@@ -246,12 +272,25 @@ mod tests {
     }
 
     #[test]
-    fn generic_object_unknown_type_defaults_to_other() {
-        let obj = GenericObjectGenerator::new("custom")
+    fn generic_object_unknown_relation_is_rejected() {
+        // Previously this defaulted the attribute type to the object_relation
+        // verbatim and the category to "Other", emitting an object MISP would
+        // reject at save time. An unknown relation is now refused up front.
+        let result = GenericObjectGenerator::new("custom")
             .add_attribute("custom-field", "value")
+            .generate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn generic_object_valid_type_without_category_defaults_to_other() {
+        // The "default the category to Other" behaviour still holds for a
+        // relation that IS a valid MISP attribute type.
+        let obj = GenericObjectGenerator::new("custom")
+            .add_attribute("comment", "value")
             .generate()
             .unwrap();
-        // Unknown type should default to "Other" category
+        assert_eq!(obj.attributes[0].attr_type, "comment");
         assert_eq!(obj.attributes[0].category, "Other");
         assert!(!obj.attributes[0].to_ids);
     }
