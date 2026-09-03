@@ -129,7 +129,7 @@ pub mod flexible_bool {
         let val: serde_json::Value = serde_json::Value::deserialize(deserializer)?;
         match val {
             serde_json::Value::Bool(b) => Ok(b),
-            serde_json::Value::Number(n) => Ok(n.as_i64() != Some(0)),
+            serde_json::Value::Number(n) => Ok(n.as_f64().map(|f| f != 0.0).unwrap_or(true)),
             serde_json::Value::String(s) => match s.as_str() {
                 "0" | "false" | "" => Ok(false),
                 _ => Ok(true),
@@ -166,7 +166,9 @@ pub mod flexible_bool_opt {
         match opt {
             None | Some(serde_json::Value::Null) => Ok(None),
             Some(serde_json::Value::Bool(b)) => Ok(Some(b)),
-            Some(serde_json::Value::Number(n)) => Ok(Some(n.as_i64() != Some(0))),
+            Some(serde_json::Value::Number(n)) => {
+                Ok(Some(n.as_f64().map(|f| f != 0.0).unwrap_or(true)))
+            }
             Some(serde_json::Value::String(s)) => match s.as_str() {
                 "0" | "false" | "" => Ok(Some(false)),
                 _ => Ok(Some(true)),
@@ -226,6 +228,32 @@ mod tests {
         ] {
             let json = format!(r#"{{"num": "1", "flag": {input}}}"#);
             let v: TestStruct = serde_json::from_str(&json).unwrap();
+            assert_eq!(v.flag, expected, "input: {input}");
+        }
+    }
+
+    #[test]
+    fn deserialize_flexible_bool_float_numbers() {
+        // JSON floats like 0.0 / 1.0 must not be silently inverted by
+        // `Number::as_i64()` returning `None` for non-integer numbers.
+        for (input, expected) in [("0.0", false), ("1.0", true), ("2.5", true)] {
+            let json = format!(r#"{{"num": "1", "flag": {input}}}"#);
+            let v: TestStruct = serde_json::from_str(&json).unwrap();
+            assert_eq!(v.flag, expected, "input: {input}");
+        }
+    }
+
+    #[test]
+    fn deserialize_flexible_bool_opt_float_numbers() {
+        #[derive(Debug, Deserialize)]
+        struct OptStruct {
+            #[serde(with = "super::flexible_bool_opt")]
+            flag: Option<bool>,
+        }
+
+        for (input, expected) in [("0.0", Some(false)), ("1.0", Some(true))] {
+            let json = format!(r#"{{"flag": {input}}}"#);
+            let v: OptStruct = serde_json::from_str(&json).unwrap();
             assert_eq!(v.flag, expected, "input: {input}");
         }
     }
