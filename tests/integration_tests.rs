@@ -928,18 +928,18 @@ async fn test_search_index() {
     let client = create_client().await;
     let ts = now_ts() - 5;
 
-    // Create 3 events with ordered names
-    let mut ev_a = MispEvent::new("AAA_rustmisp_index_test");
+    // Create 3 events with ordered, unique names
+    let mut ev_a = MispEvent::new(unique("AAA_rustmisp_index_test"));
     ev_a.distribution = Some(0);
     let ev_a = client.add_event(&ev_a).await.expect("add A");
     let ev_a_id = ev_a.id.unwrap();
 
-    let mut ev_b = MispEvent::new("BBB_rustmisp_index_test");
+    let mut ev_b = MispEvent::new(unique("BBB_rustmisp_index_test"));
     ev_b.distribution = Some(0);
     let ev_b = client.add_event(&ev_b).await.expect("add B");
     let ev_b_id = ev_b.id.unwrap();
 
-    let mut ev_c = MispEvent::new("CCC_rustmisp_index_test");
+    let mut ev_c = MispEvent::new(unique("CCC_rustmisp_index_test"));
     ev_c.distribution = Some(0);
     let ev_c = client.add_event(&ev_c).await.expect("add C");
     let ev_c_id = ev_c.id.unwrap();
