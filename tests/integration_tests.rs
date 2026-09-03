@@ -225,6 +225,11 @@ async fn test_event_crud_lifecycle() {
 
     // --- PUBLISH / UNPUBLISH ---
     client.publish(event_id, false).await.expect("publish");
+    // publish() only queues the job, so read back through the same wait the
+    // search test uses. This also settles the worker before the unpublish
+    // below: without it the worker can set `published` back to true after
+    // unpublish() has run, which would fail the next assertion instead.
+    wait_until_published(&client, event_id).await;
     let pub_ev = client.get_event(event_id).await.unwrap();
     assert!(pub_ev.published);
 
