@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::attribute::MispAttribute;
-use super::serde_helpers::{flexible_bool, string_or_i64_opt};
+use super::serde_helpers::{flexible_bool, flexible_bool_opt, string_or_i64_opt};
 use super::tag::MispTag;
 
 /// A MISP event — the primary container for threat intelligence data.
@@ -120,7 +120,11 @@ pub struct MispEvent {
     pub extends_uuid: Option<String>,
 
     /// Whether the event is cryptographically protected.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "flexible_bool_opt",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub protected: Option<bool>,
 
     /// Email of the event creator.
@@ -310,5 +314,35 @@ mod tests {
         let event: MispEvent = serde_json::from_value(val["Event"].clone()).unwrap();
         assert_eq!(event.id, Some(5));
         assert_eq!(event.info, "Test");
+    }
+
+    #[test]
+    fn event_protected_accepts_flexible_bool_variants() {
+        // MISP emits `protected` as a numeric 0/1 or a stringified "0"/"1", just
+        // like published/locked/proposal_email_lock/disable_correlation. Without
+        // flexible_bool_opt, "protected": 0 fails deserialization of the whole event.
+        let json_numeric_false = r#"{"id": "1", "info": "Test", "protected": 0}"#;
+        let event: MispEvent = serde_json::from_str(json_numeric_false).unwrap();
+        assert_eq!(event.protected, Some(false));
+
+        let json_string_false = r#"{"id": "1", "info": "Test", "protected": "0"}"#;
+        let event: MispEvent = serde_json::from_str(json_string_false).unwrap();
+        assert_eq!(event.protected, Some(false));
+
+        let json_numeric_true = r#"{"id": "1", "info": "Test", "protected": 1}"#;
+        let event: MispEvent = serde_json::from_str(json_numeric_true).unwrap();
+        assert_eq!(event.protected, Some(true));
+
+        let json_string_true = r#"{"id": "1", "info": "Test", "protected": "1"}"#;
+        let event: MispEvent = serde_json::from_str(json_string_true).unwrap();
+        assert_eq!(event.protected, Some(true));
+
+        let json_bool = r#"{"id": "1", "info": "Test", "protected": true}"#;
+        let event: MispEvent = serde_json::from_str(json_bool).unwrap();
+        assert_eq!(event.protected, Some(true));
+
+        let json_missing = r#"{"id": "1", "info": "Test"}"#;
+        let event: MispEvent = serde_json::from_str(json_missing).unwrap();
+        assert_eq!(event.protected, None);
     }
 }
