@@ -23,7 +23,11 @@ pub struct MispObject {
     pub name: String,
 
     /// Meta-category (e.g., `"file"`, `"network"`, `"misc"`).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "meta-category",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub meta_category: Option<String>,
 
     /// Description of this object.
@@ -272,7 +276,11 @@ pub struct MispObjectTemplate {
     pub description: Option<String>,
 
     /// Meta-category.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "meta-category",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub meta_category: Option<String>,
 
     /// Whether this template is active.
@@ -383,6 +391,7 @@ mod tests {
         let obj: MispObject = serde_json::from_str(json).unwrap();
         assert_eq!(obj.id, Some(10));
         assert_eq!(obj.name, "file");
+        assert_eq!(obj.meta_category.as_deref(), Some("file"));
         assert_eq!(obj.template_version, Some(23));
         assert_eq!(obj.attributes.len(), 1);
         assert_eq!(obj.attributes[0].attr_type, "md5");
@@ -483,6 +492,7 @@ mod tests {
         assert_eq!(t.id, Some(42));
         assert_eq!(t.name, "domain-ip");
         assert_eq!(t.version, Some(10));
+        assert_eq!(t.meta_category.as_deref(), Some("network"));
         assert!(t.active);
     }
 }

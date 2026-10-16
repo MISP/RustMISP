@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::attribute::MispAttribute;
+use super::object::MispObject;
 use super::serde_helpers::{flexible_bool, string_or_i64_opt};
 use super::tag::MispTag;
 
@@ -139,6 +140,10 @@ pub struct MispEvent {
     #[serde(default, rename = "Attribute", skip_serializing_if = "Vec::is_empty")]
     pub attributes: Vec<MispAttribute>,
 
+    /// MISP objects in this event.
+    #[serde(default, rename = "Object", skip_serializing_if = "Vec::is_empty")]
+    pub objects: Vec<MispObject>,
+
     /// Tags applied to this event.
     #[serde(default, rename = "Tag", skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<MispTag>,
@@ -189,6 +194,7 @@ impl MispEvent {
             org: None,
             orgc: None,
             attributes: Vec::new(),
+            objects: Vec::new(),
             tags: Vec::new(),
         }
     }
@@ -205,6 +211,7 @@ mod tests {
         assert!(!event.published);
         assert!(event.id.is_none());
         assert!(event.attributes.is_empty());
+        assert!(event.objects.is_empty());
         assert!(event.tags.is_empty());
     }
 
@@ -242,6 +249,7 @@ mod tests {
                 uuid: None,
             }),
             attributes: vec![MispAttribute::new("md5", "Payload delivery", "abc123")],
+            objects: vec![MispObject::new("domain-ip")],
             tags: vec![MispTag::new("osint")],
         };
         let json = serde_json::to_string(&event).unwrap();
@@ -284,6 +292,23 @@ mod tests {
                     "disable_correlation": false
                 }
             ],
+            "Object": [
+                {
+                    "id": "7",
+                    "name": "domain-ip",
+                    "meta-category": "network",
+                    "uuid": "b46eb2ab-0d05-4e46-9b4d-5d1bbd3d0b6e",
+                    "Attribute": [
+                        {
+                            "id": "40",
+                            "type": "domain",
+                            "category": "Network activity",
+                            "value": "evil.com",
+                            "object_relation": "domain"
+                        }
+                    ]
+                }
+            ],
             "Tag": [
                 {"name": "osint"},
                 {"name": "tlp:green"}
@@ -296,6 +321,10 @@ mod tests {
         assert_eq!(event.analysis, Some(2));
         assert_eq!(event.attributes.len(), 1);
         assert_eq!(event.attributes[0].attr_type, "md5");
+        assert_eq!(event.objects.len(), 1);
+        assert_eq!(event.objects[0].name, "domain-ip");
+        assert_eq!(event.objects[0].meta_category.as_deref(), Some("network"));
+        assert_eq!(event.objects[0].attributes[0].value, "evil.com");
         assert_eq!(event.tags.len(), 2);
         assert_eq!(event.tags[0].name, "osint");
         assert_eq!(event.org.as_ref().unwrap().name, "ORGNAME");
