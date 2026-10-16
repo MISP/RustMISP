@@ -1,6 +1,28 @@
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use super::serde_helpers::string_or_i64_opt;
+
+/// Target type of an attribute value (MISP 3.0+), addressed by SHA-256 instead of UUID.
+const ATTRIBUTE_VALUE: &str = "AttributeValue";
+
+/// Address of an attribute value (MISP 3.0+) for notes, opinions and relationships
+/// of type `AttributeValue`: the SHA-256 of the value as MISP stores it, in lowercase hex.
+///
+/// Hash the value as the API returns it (MISP refangs, trims and lowercases some
+/// types on save), and each half of a composite attribute (`domain|ip`, ...) on its own.
+pub fn value_sha256(value: &str) -> String {
+    format!("{:x}", Sha256::digest(value.as_bytes()))
+}
+
+/// The target type decides the address: `(uuid, sha256)`.
+fn split_address(object_type: &str, address: String) -> (Option<String>, Option<String>) {
+    if object_type == ATTRIBUTE_VALUE {
+        (None, Some(address.trim().to_lowercase()))
+    } else {
+        (Some(address), None)
+    }
+}
 
 /// The type of analyst data entity.
 ///
@@ -63,6 +85,11 @@ pub struct MispNote {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub object_uuid: Option<String>,
 
+    /// SHA-256 of the attribute value this note is attached to (`object_type`
+    /// `AttributeValue`, MISP 3.0+); `object_uuid` is empty then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub object_sha256: Option<String>,
+
     /// Type of the object this note is attached to (e.g., "Attribute", "Event").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub object_type: Option<String>,
@@ -117,6 +144,7 @@ impl MispNote {
             note: note.into(),
             language: None,
             object_uuid: None,
+            object_sha256: None,
             object_type: None,
             authors: None,
             created: None,
@@ -129,13 +157,17 @@ impl MispNote {
     }
 
     /// Set the target object for this note.
+    ///
+    /// The type decides the address: a SHA-256 for `AttributeValue` (see
+    /// [`value_sha256`]), a UUID for every other type.
     pub fn for_object(
         mut self,
         object_type: impl Into<String>,
-        object_uuid: impl Into<String>,
+        address: impl Into<String>,
     ) -> Self {
-        self.object_type = Some(object_type.into());
-        self.object_uuid = Some(object_uuid.into());
+        let object_type = object_type.into();
+        (self.object_uuid, self.object_sha256) = split_address(&object_type, address.into());
+        self.object_type = Some(object_type);
         self
     }
 }
@@ -174,6 +206,11 @@ pub struct MispOpinion {
     /// UUID of the object this opinion is attached to.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub object_uuid: Option<String>,
+
+    /// SHA-256 of the attribute value this opinion is attached to (`object_type`
+    /// `AttributeValue`, MISP 3.0+); `object_uuid` is empty then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub object_sha256: Option<String>,
 
     /// Type of the object this opinion is attached to (e.g., "Attribute", "Event").
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -229,6 +266,7 @@ impl MispOpinion {
             opinion: Some(opinion),
             comment: None,
             object_uuid: None,
+            object_sha256: None,
             object_type: None,
             authors: None,
             created: None,
@@ -241,13 +279,17 @@ impl MispOpinion {
     }
 
     /// Set the target object for this opinion.
+    ///
+    /// The type decides the address: a SHA-256 for `AttributeValue` (see
+    /// [`value_sha256`]), a UUID for every other type.
     pub fn for_object(
         mut self,
         object_type: impl Into<String>,
-        object_uuid: impl Into<String>,
+        address: impl Into<String>,
     ) -> Self {
-        self.object_type = Some(object_type.into());
-        self.object_uuid = Some(object_uuid.into());
+        let object_type = object_type.into();
+        (self.object_uuid, self.object_sha256) = split_address(&object_type, address.into());
+        self.object_type = Some(object_type);
         self
     }
 
@@ -284,6 +326,11 @@ pub struct MispRelationship {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub related_object_uuid: Option<String>,
 
+    /// SHA-256 of the related attribute value (`related_object_type`
+    /// `AttributeValue`, MISP 3.0+); `related_object_uuid` is empty then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub related_object_sha256: Option<String>,
+
     /// Type of the related (target) object.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub related_object_type: Option<String>,
@@ -291,6 +338,11 @@ pub struct MispRelationship {
     /// UUID of the source object.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub object_uuid: Option<String>,
+
+    /// SHA-256 of the source attribute value (`object_type` `AttributeValue`,
+    /// MISP 3.0+); `object_uuid` is empty then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub object_sha256: Option<String>,
 
     /// Type of the source object.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -345,8 +397,10 @@ impl MispRelationship {
             uuid: None,
             relationship_type: Some(relationship_type.into()),
             related_object_uuid: None,
+            related_object_sha256: None,
             related_object_type: None,
             object_uuid: None,
+            object_sha256: None,
             object_type: None,
             authors: None,
             created: None,
@@ -359,24 +413,32 @@ impl MispRelationship {
     }
 
     /// Set the source object for this relationship.
+    ///
+    /// The type decides the address: a SHA-256 for `AttributeValue` (see
+    /// [`value_sha256`]), a UUID for every other type.
     pub fn from_object(
         mut self,
         object_type: impl Into<String>,
-        object_uuid: impl Into<String>,
+        address: impl Into<String>,
     ) -> Self {
-        self.object_type = Some(object_type.into());
-        self.object_uuid = Some(object_uuid.into());
+        let object_type = object_type.into();
+        (self.object_uuid, self.object_sha256) = split_address(&object_type, address.into());
+        self.object_type = Some(object_type);
         self
     }
 
     /// Set the target (related) object for this relationship.
+    ///
+    /// The type decides the address, as in [`Self::from_object`].
     pub fn to_object(
         mut self,
         related_object_type: impl Into<String>,
-        related_object_uuid: impl Into<String>,
+        address: impl Into<String>,
     ) -> Self {
-        self.related_object_type = Some(related_object_type.into());
-        self.related_object_uuid = Some(related_object_uuid.into());
+        let related_object_type = related_object_type.into();
+        (self.related_object_uuid, self.related_object_sha256) =
+            split_address(&related_object_type, address.into());
+        self.related_object_type = Some(related_object_type);
         self
     }
 }
@@ -408,6 +470,7 @@ mod tests {
             note: "Analyst observation".into(),
             language: Some("en".into()),
             object_uuid: Some("event-uuid-5678".into()),
+            object_sha256: None,
             object_type: Some("Event".into()),
             authors: Some("analyst@example.com".into()),
             created: Some("2024-01-15 10:30:00".into()),
@@ -469,6 +532,7 @@ mod tests {
             opinion: Some(85),
             comment: Some("Likely accurate".into()),
             object_uuid: Some("attr-uuid".into()),
+            object_sha256: None,
             object_type: Some("Attribute".into()),
             authors: Some("analyst@example.com".into()),
             created: Some("2024-01-15 10:30:00".into()),
@@ -526,8 +590,10 @@ mod tests {
             uuid: Some("rel-uuid".into()),
             relationship_type: Some("related-to".into()),
             related_object_uuid: Some("target-uuid".into()),
+            related_object_sha256: None,
             related_object_type: Some("Event".into()),
             object_uuid: Some("source-uuid".into()),
+            object_sha256: None,
             object_type: Some("Attribute".into()),
             authors: Some("analyst@example.com".into()),
             created: Some("2024-01-15 10:30:00".into()),
@@ -558,6 +624,102 @@ mod tests {
         let rel: MispRelationship = serde_json::from_str(json).unwrap();
         assert_eq!(rel.id, Some(7));
         assert_eq!(rel.relationship_type.as_deref(), Some("derived-from"));
+    }
+
+    const EVIL_COM: &str = "1867b49abe26b512d11cb45294e41afa6f728697705714911c5c001179f7f2bb";
+
+    #[test]
+    fn value_sha256_hashes_the_utf8_bytes() {
+        assert_eq!(value_sha256("evil.com"), EVIL_COM);
+        assert_eq!(
+            value_sha256("\u{c9}vil.com"),
+            "634d161f935a01ad952b1ecce32942e669ab2751ff401cc1bfbd398c715143cc"
+        );
+        assert_eq!(
+            value_sha256(""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    #[test]
+    fn note_on_value_uses_sha256() {
+        let note = MispNote::new("Seen in phishing")
+            .for_object("AttributeValue", format!(" {} ", EVIL_COM.to_uppercase()));
+        assert_eq!(note.object_type.as_deref(), Some("AttributeValue"));
+        assert_eq!(note.object_sha256.as_deref(), Some(EVIL_COM));
+        assert!(note.object_uuid.is_none());
+
+        let json = serde_json::to_value(&note).unwrap();
+        assert_eq!(json["object_sha256"], EVIL_COM);
+        assert!(json.get("object_uuid").is_none());
+    }
+
+    #[test]
+    fn retargeting_clears_the_other_address() {
+        let note = MispNote::new("n")
+            .for_object("AttributeValue", EVIL_COM)
+            .for_object("Event", "event-uuid");
+        assert_eq!(note.object_uuid.as_deref(), Some("event-uuid"));
+        assert!(note.object_sha256.is_none());
+
+        let opinion = MispOpinion::new(50)
+            .for_object("Event", "event-uuid")
+            .for_object("AttributeValue", EVIL_COM);
+        assert!(opinion.object_uuid.is_none());
+        assert_eq!(opinion.object_sha256.as_deref(), Some(EVIL_COM));
+    }
+
+    #[test]
+    fn relationship_ends_on_values() {
+        let rel = MispRelationship::new("related-to")
+            .from_object("Attribute", "attr-uuid")
+            .to_object("AttributeValue", EVIL_COM);
+        assert_eq!(rel.object_uuid.as_deref(), Some("attr-uuid"));
+        assert!(rel.object_sha256.is_none());
+        assert!(rel.related_object_uuid.is_none());
+        assert_eq!(rel.related_object_sha256.as_deref(), Some(EVIL_COM));
+
+        let rel = MispRelationship::new("related-to")
+            .from_object("AttributeValue", EVIL_COM)
+            .to_object("Event", "event-uuid");
+        assert!(rel.object_uuid.is_none());
+        assert_eq!(rel.object_sha256.as_deref(), Some(EVIL_COM));
+        assert_eq!(rel.related_object_uuid.as_deref(), Some("event-uuid"));
+        assert!(rel.related_object_sha256.is_none());
+    }
+
+    #[test]
+    fn deserialize_value_addressed_misp_format() {
+        let note: MispNote = serde_json::from_str(&format!(
+            r#"{{"id": "1612", "note": "N", "object_uuid": null,
+                "object_sha256": "{EVIL_COM}", "object_type": "AttributeValue"}}"#
+        ))
+        .unwrap();
+        assert!(note.object_uuid.is_none());
+        assert_eq!(note.object_sha256.as_deref(), Some(EVIL_COM));
+
+        let opinion: MispOpinion = serde_json::from_str(&format!(
+            r#"{{"id": "41", "opinion": "70", "object_uuid": null,
+                "object_sha256": "{EVIL_COM}", "object_type": "AttributeValue"}}"#
+        ))
+        .unwrap();
+        assert_eq!(opinion.object_sha256.as_deref(), Some(EVIL_COM));
+
+        let rel: MispRelationship = serde_json::from_str(&format!(
+            r#"{{"id": "1022", "relationship_type": "related-to",
+                "object_uuid": "attr-uuid", "object_sha256": null,
+                "object_type": "Attribute", "related_object_uuid": null,
+                "related_object_sha256": "{EVIL_COM}",
+                "related_object_type": "AttributeValue"}}"#
+        ))
+        .unwrap();
+        assert_eq!(rel.object_uuid.as_deref(), Some("attr-uuid"));
+        assert!(rel.object_sha256.is_none());
+        assert!(rel.related_object_uuid.is_none());
+        assert_eq!(rel.related_object_sha256.as_deref(), Some(EVIL_COM));
+        let back: MispRelationship =
+            serde_json::from_str(&serde_json::to_string(&rel).unwrap()).unwrap();
+        assert_eq!(rel, back);
     }
 
     #[test]

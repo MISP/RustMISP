@@ -46,7 +46,9 @@ pub use client::{MispClient, MispClientBuilder, register_user};
 #[cfg(feature = "blocking")]
 pub use client_blocking::{MispClientBlocking, MispClientBlockingBuilder, register_user_blocking};
 pub use error::{MispError, MispResult};
-pub use models::analyst_data::{AnalystDataType, MispNote, MispOpinion, MispRelationship};
+pub use models::analyst_data::{
+    AnalystDataType, MispNote, MispOpinion, MispRelationship, value_sha256,
+};
 pub use models::attribute::MispAttribute;
 pub use models::blocklist::{MispEventBlocklist, MispOrganisationBlocklist};
 pub use models::community::MispCommunity;
