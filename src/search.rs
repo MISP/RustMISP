@@ -254,7 +254,7 @@ impl SearchParameters {
 
         insert_opt!(sg_reference_only, "sgReferenceOnly");
         insert_opt!(searchall);
-        insert_opt!(quickfilter);
+        insert_opt!(quickfilter, "quickFilter");
         insert_opt!(decaying_model, "decayingModel");
         insert_opt!(score);
         insert_opt!(exclude_decayed, "excludeDecayed");
@@ -758,6 +758,19 @@ mod tests {
         assert_eq!(obj["includeCorrelations"], true);
         assert_eq!(obj["includeSightings"], true);
         assert_eq!(obj["includeDecayScore"], false);
+    }
+
+    #[test]
+    fn search_builder_quickfilter_serializes_as_camel_case() {
+        // MISP (and PyMISP, see pymisp/api.py `query['quickFilter'] = quick_filter`)
+        // expects the camelCase key `quickFilter`; PHP array keys are case-sensitive
+        // so a lowercase `quickfilter` key is silently ignored by the server.
+        let params = SearchBuilder::new().quickfilter("badge").build();
+        let json = params.to_json();
+        let obj = json.as_object().unwrap();
+
+        assert_eq!(obj["quickFilter"], "badge");
+        assert!(!obj.contains_key("quickfilter"));
     }
 
     #[test]
