@@ -1878,9 +1878,25 @@ impl MispClient {
         Ok(users)
     }
 
-    /// Get a single user by ID. Pass `"me"` equivalent by using `get_user(0)` for the current user.
+    /// Get a single user by ID.
     pub async fn get_user(&self, id: i64) -> MispResult<MispUser> {
         let json = self.get(&format!("users/view/{id}")).await?;
+        let val = if json.get("User").is_some() {
+            &json["User"]
+        } else {
+            &json
+        };
+        Ok(serde_json::from_value(val.clone())?)
+    }
+
+    /// Get the currently authenticated user (the owner of the API key in use).
+    ///
+    /// MISP special-cases the literal string `"me"` in `UsersController::view()`
+    /// (`if ("me" === $id) { $id = $this->Auth->user('id'); }`); `users/view/0`
+    /// is not special-cased and throws `NotFoundException`, so this cannot be
+    /// reached through [`MispClient::get_user`] with an integer id.
+    pub async fn get_user_me(&self) -> MispResult<MispUser> {
+        let json = self.get("users/view/me").await?;
         let val = if json.get("User").is_some() {
             &json["User"]
         } else {
@@ -5739,6 +5755,40 @@ mod tests {
         assert_eq!(user.id, Some(1));
         assert_eq!(user.email, "admin@misp.local");
         assert!(user.termsaccepted);
+    }
+
+    #[tokio::test]
+    async fn get_user_me_hits_literal_me_path() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        // MISP's UsersController::view() only special-cases the literal
+        // string "me" (`if ("me" === $id) { ... }`); users/view/0 is not
+        // special-cased and throws NotFoundException. Assert the client
+        // hits users/view/me, not users/view/0.
+        Mock::given(method("GET"))
+            .and(path("/users/view/me"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "User": {
+                    "id": "1",
+                    "email": "admin@misp.local",
+                    "org_id": "1",
+                    "role_id": "1",
+                    "termsaccepted": "1",
+                    "autoalert": "1",
+                    "contactalert": "0",
+                    "disabled": "0"
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let user = client.get_user_me().await.unwrap();
+        assert_eq!(user.id, Some(1));
+        assert_eq!(user.email, "admin@misp.local");
     }
 
     #[tokio::test]
