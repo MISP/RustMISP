@@ -2550,11 +2550,11 @@ impl MispClient {
         setting: &str,
         user_id: Option<i64>,
     ) -> MispResult<Value> {
-        let path = match user_id {
-            Some(uid) => format!("userSettings/delete/{setting}/{uid}"),
-            None => format!("userSettings/delete/{setting}"),
-        };
-        self.post(&path, &serde_json::json!({})).await
+        let mut body = serde_json::json!({"setting": setting});
+        if let Some(uid) = user_id {
+            body["user_id"] = serde_json::json!(uid);
+        }
+        self.post("userSettings/delete", &body).await
     }
 
     // ----------------------------------------------------------------
@@ -6372,14 +6372,15 @@ mod tests {
 
     #[tokio::test]
     async fn delete_user_setting_sends_request() {
-        use wiremock::matchers::{method, path};
+        use wiremock::matchers::{body_json, method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
         let server = MockServer::start().await;
         let client = MispClient::new(server.uri(), "key", false).unwrap();
 
         Mock::given(method("POST"))
-            .and(path("/userSettings/delete/dashboard"))
+            .and(path("/userSettings/delete"))
+            .and(body_json(serde_json::json!({"setting": "dashboard"})))
             .respond_with(
                 ResponseTemplate::new(200)
                     .set_body_json(serde_json::json!({"message": "Setting deleted."})),
@@ -6388,6 +6389,33 @@ mod tests {
             .await;
 
         let r = client.delete_user_setting("dashboard", None).await.unwrap();
+        assert_eq!(r["message"], "Setting deleted.");
+    }
+
+    #[tokio::test]
+    async fn delete_user_setting_with_user_id_sends_request() {
+        use wiremock::matchers::{body_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/userSettings/delete"))
+            .and(body_json(
+                serde_json::json!({"setting": "dashboard", "user_id": 5}),
+            ))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Setting deleted."})),
+            )
+            .mount(&server)
+            .await;
+
+        let r = client
+            .delete_user_setting("dashboard", Some(5))
+            .await
+            .unwrap();
         assert_eq!(r["message"], "Setting deleted.");
     }
 }
