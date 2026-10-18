@@ -2816,6 +2816,21 @@ impl MispClient {
 
     /// Change the sharing group on an entity (event or attribute).
     ///
+    /// There is no dedicated `changeSharingGroup` action in MISP's
+    /// `EventsController`/`AttributesController`. PyMISP instead sets
+    /// `distribution = 4` ("Sharing group") and `sharing_group_id` on the
+    /// entity and re-issues the normal edit call
+    /// (`pymisp/api.py::change_sharing_group_on_entity`, which delegates to
+    /// `update_event`/`update_attribute`/`update_object` — see
+    /// `pymisp/api.py` lines 3895-3913). We fetch the entity by UUID (both
+    /// `events/view/{id}` and `attributes/view/{id}` accept a UUID in place
+    /// of the numeric id — see `EventsController::view()` and
+    /// `AttributesController::__fetchAttribute()`), patch those two fields,
+    /// and post it back to the matching edit endpoint (`events/edit/{id}` /
+    /// `attributes/edit/{id}`, which likewise accept a UUID —
+    /// `EventsController::edit()` line 4614 and
+    /// `AttributesController::edit()`).
+    ///
     /// `entity_type` should be `"event"` or `"attribute"`.
     pub async fn change_sharing_group_on_entity(
         &self,
@@ -2823,12 +2838,41 @@ impl MispClient {
         sharing_group_id: i64,
         entity_type: &str,
     ) -> MispResult<Value> {
-        let body = serde_json::json!({
-            "uuid": entity_uuid,
-            "sharing_group_id": sharing_group_id,
-            "type": entity_type,
-        });
-        self.post("events/changeSharingGroup", &body).await
+        let (key, view_path, edit_path) = match entity_type.to_lowercase().as_str() {
+            "event" => (
+                "Event",
+                format!("events/view/{entity_uuid}"),
+                format!("events/edit/{entity_uuid}"),
+            ),
+            "attribute" => (
+                "Attribute",
+                format!("attributes/view/{entity_uuid}"),
+                format!("attributes/edit/{entity_uuid}"),
+            ),
+            other => {
+                return Err(MispError::MissingField(format!(
+                    "entity_type must be \"event\" or \"attribute\", got \"{other}\""
+                )));
+            }
+        };
+
+        let json = self.get(&view_path).await?;
+        let mut entity = if json.get(key).is_some() {
+            json[key].clone()
+        } else {
+            json
+        };
+        if let Some(obj) = entity.as_object_mut() {
+            obj.remove("SharingGroup");
+            obj.remove("timestamp");
+            obj.insert("distribution".into(), serde_json::json!(4));
+            obj.insert(
+                "sharing_group_id".into(),
+                serde_json::json!(sharing_group_id),
+            );
+        }
+        let body = serde_json::json!({ key: entity });
+        self.post(&edit_path, &body).await
     }
 
     /// Get attribute type/category statistics.
@@ -6389,5 +6433,111 @@ mod tests {
 
         let r = client.delete_user_setting("dashboard", None).await.unwrap();
         assert_eq!(r["message"], "Setting deleted.");
+    }
+
+    #[tokio::test]
+    async fn change_sharing_group_on_entity_edits_event_with_distribution_4() {
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+        let uuid = "5e2f1c2e-64d1-4d6e-9a1b-0242ac120002";
+
+        // There is no events/changeSharingGroup action in EventsController:
+        // MISP truth is fetch-then-edit like PyMISP's change_sharing_group_on_entity.
+        Mock::given(method("GET"))
+            .and(path(format!("/events/view/{uuid}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "Event": {
+                    "id": "42",
+                    "uuid": uuid,
+                    "info": "Test Event",
+                    "distribution": "0",
+                    "SharingGroup": { "id": "1", "name": "old" }
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path(format!("/events/edit/{uuid}")))
+            .and(body_partial_json(serde_json::json!({
+                "Event": {
+                    "id": "42",
+                    "distribution": 4,
+                    "sharing_group_id": 7
+                }
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "Event": {
+                    "id": "42",
+                    "uuid": uuid,
+                    "info": "Test Event",
+                    "distribution": "4",
+                    "sharing_group_id": "7"
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let result = client
+            .change_sharing_group_on_entity(uuid, 7, "event")
+            .await
+            .unwrap();
+        assert_eq!(result["Event"]["distribution"], "4");
+        assert_eq!(result["Event"]["sharing_group_id"], "7");
+    }
+
+    #[tokio::test]
+    async fn change_sharing_group_on_entity_edits_attribute() {
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+        let uuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+        Mock::given(method("GET"))
+            .and(path(format!("/attributes/view/{uuid}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "Attribute": {
+                    "id": "10",
+                    "uuid": uuid,
+                    "event_id": "42",
+                    "type": "ip-dst",
+                    "category": "Network activity",
+                    "value": "1.2.3.4",
+                    "distribution": "0"
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path(format!("/attributes/edit/{uuid}")))
+            .and(body_partial_json(serde_json::json!({
+                "Attribute": {
+                    "id": "10",
+                    "distribution": 4,
+                    "sharing_group_id": 3
+                }
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "Attribute": {
+                    "id": "10",
+                    "uuid": uuid,
+                    "distribution": "4",
+                    "sharing_group_id": "3"
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let result = client
+            .change_sharing_group_on_entity(uuid, 3, "attribute")
+            .await
+            .unwrap();
+        assert_eq!(result["Attribute"]["distribution"], "4");
     }
 }
