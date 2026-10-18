@@ -323,7 +323,7 @@ The `MispClient` struct provides all ~243 methods from PyMISP's `PyMISP` class. 
 | `add_object(event_id, object)` | `add_object` |
 | `update_object(object)` | `update_object` |
 | `delete_object(id, hard)` | `delete_object` |
-| `add_object_reference(reference)` | `add_object_reference` |
+| `add_object_reference(object_id, reference)` | `add_object_reference` |
 | `delete_object_reference(id)` | `delete_object_reference` |
 | `object_templates()` | `object_templates` |
 | `get_object_template(id)` | `get_object_template` |
