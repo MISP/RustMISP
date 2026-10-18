@@ -91,6 +91,17 @@ impl MispClientBlockingBuilder {
 /// Each method blocks the calling thread until the operation completes.
 /// Internally uses a dedicated single-threaded Tokio runtime.
 ///
+/// # Panics
+///
+/// This client internally uses [`tokio::runtime::Runtime::block_on`], which
+/// panics if called from within an asynchronous execution context (i.e. a
+/// Tokio runtime). Do not call any method on [`MispClientBlocking`] from
+/// code that is already running inside a Tokio (or other async) runtime —
+/// use the async [`MispClient`] there instead. Dropping a
+/// [`MispClientBlocking`] from within an async context panics for the same
+/// reason. This mirrors the constraint documented by
+/// [`reqwest::blocking`](https://docs.rs/reqwest/latest/reqwest/blocking/index.html#).
+///
 /// # Example
 /// ```no_run
 /// use rustmisp::MispClientBlocking;
