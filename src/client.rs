@@ -2536,11 +2536,22 @@ impl MispClient {
         value: &Value,
         user_id: Option<i64>,
     ) -> MispResult<Value> {
-        let path = match user_id {
-            Some(uid) => format!("userSettings/setSetting/{uid}/{setting}"),
-            None => format!("userSettings/setSetting/{setting}"),
+        // `UserSettingsController::setSetting($user_id = false, $setting = false)`
+        // binds URL segments positionally. A single-segment path binds that
+        // segment to $user_id, leaving $setting unset - so the setting name
+        // must always travel in the request body (matching PyMISP's
+        // `set_user_setting`, which always POSTs to the bare `setSetting`
+        // path with `setting` in the body).
+        let (path, body) = match user_id {
+            Some(uid) => (
+                format!("userSettings/setSetting/{uid}/{setting}"),
+                serde_json::json!({"value": value}),
+            ),
+            None => (
+                "userSettings/setSetting".to_string(),
+                serde_json::json!({"setting": setting, "value": value}),
+            ),
         };
-        let body = serde_json::json!({"value": value});
         self.post(&path, &body).await
     }
 
@@ -6351,7 +6362,36 @@ mod tests {
         let client = MispClient::new(server.uri(), "key", false).unwrap();
 
         Mock::given(method("POST"))
-            .and(path("/userSettings/setSetting/dashboard"))
+            .and(path("/userSettings/setSetting"))
+            .and(body_partial_json(serde_json::json!({
+                "setting": "dashboard",
+                "value": {"widgets": ["timeline"]}
+            })))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Setting saved."})),
+            )
+            .mount(&server)
+            .await;
+
+        let val = serde_json::json!({"widgets": ["timeline"]});
+        let r = client
+            .set_user_setting("dashboard", &val, None)
+            .await
+            .unwrap();
+        assert_eq!(r["message"], "Setting saved.");
+    }
+
+    #[tokio::test]
+    async fn set_user_setting_with_user_id_uses_two_segment_path() {
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/userSettings/setSetting/42/dashboard"))
             .and(body_partial_json(
                 serde_json::json!({"value": {"widgets": ["timeline"]}}),
             ))
@@ -6364,7 +6404,7 @@ mod tests {
 
         let val = serde_json::json!({"widgets": ["timeline"]});
         let r = client
-            .set_user_setting("dashboard", &val, None)
+            .set_user_setting("dashboard", &val, Some(42))
             .await
             .unwrap();
         assert_eq!(r["message"], "Setting saved.");
