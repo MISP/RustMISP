@@ -17,7 +17,7 @@ use rustmisp::{
 async fn main() -> MispResult<()> {
     let url = std::env::var("MISP_URL").expect("Set MISP_URL environment variable");
     let key = std::env::var("MISP_KEY").expect("Set MISP_KEY environment variable");
-    let ssl_verify = std::env::var("MISP_SSL_VERIFY")
+    let ssl_verify = std::env::var("MISP_VERIFYCERT")
         .map(|v| v != "0" && v.to_lowercase() != "false")
         .unwrap_or(true);
 
