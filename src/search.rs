@@ -261,7 +261,7 @@ impl SearchParameters {
         insert_opt!(model_overrides, "modelOverrides");
         insert_opt!(metadata);
         insert_opt!(attribute_timestamp);
-        insert_opt!(event_info, "event_info");
+        insert_opt!(event_info, "eventinfo");
         insert_opt!(headerless);
 
         Value::Object(map)
@@ -901,6 +901,19 @@ mod tests {
         let json = params.to_json();
         assert_eq!(json["returnFormat"], "csv");
         assert_eq!(json["headerless"], true);
+    }
+
+    #[test]
+    fn search_builder_event_info_uses_misp_key() {
+        // MISP's restSearch expects `eventinfo` in the request body (see PyMISP
+        // api.py: `query['eventinfo'] = eventinfo`), not `event_info`.
+        let params = SearchBuilder::new().event_info("Malware campaign").build();
+        let json = params.to_json();
+        assert_eq!(json["eventinfo"], "Malware campaign");
+        assert!(
+            json.get("event_info").is_none(),
+            "must not emit the wrong key `event_info`"
+        );
     }
 
     #[test]
