@@ -3030,10 +3030,10 @@ impl MispClient {
     ) -> MispResult<Value> {
         let mut body = serde_json::Map::new();
         if let Some(org) = requestor_org {
-            body.insert("requestor_org".into(), serde_json::json!(org));
+            body.insert("org_name".into(), serde_json::json!(org));
         }
         if let Some(email) = requestor_email {
-            body.insert("requestor_email".into(), serde_json::json!(email));
+            body.insert("email".into(), serde_json::json!(email));
         }
         if let Some(msg) = message {
             body.insert("message".into(), serde_json::json!(msg));
@@ -6389,5 +6389,48 @@ mod tests {
 
         let r = client.delete_user_setting("dashboard", None).await.unwrap();
         assert_eq!(r["message"], "Setting deleted.");
+    }
+
+    #[tokio::test]
+    async fn request_community_access_sends_org_name_and_email() {
+        use wiremock::matchers::{body_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        // MISP's CommunitiesController::requestAccess() (and PyMISP's
+        // request_community_access) expect the requestor's organisation
+        // name under `org_name` and the requestor's e-mail under `email` -
+        // not `requestor_org` / `requestor_email`.
+        Mock::given(method("POST"))
+            .and(path("/communities/requestAccess/1"))
+            .and(body_json(serde_json::json!({
+                "org_name": "ACME Corp",
+                "email": "requestor@example.com",
+                "message": "Please let us in",
+                "sync": true,
+                "anonymise": false
+            })))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Request sent."})),
+            )
+            .mount(&server)
+            .await;
+
+        let r = client
+            .request_community_access(
+                1,
+                Some("ACME Corp"),
+                Some("requestor@example.com"),
+                Some("Please let us in"),
+                Some(true),
+                Some(false),
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(r["message"], "Request sent.");
     }
 }
