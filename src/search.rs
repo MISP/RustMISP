@@ -70,6 +70,19 @@ impl ReturnFormat {
             Self::OpenIoc => "openioc",
         }
     }
+
+    /// Whether MISP returns a JSON body for this format.
+    ///
+    /// PyMISP's `search()` only guarantees JSON decoding for `json` (and
+    /// `yara-json`, not modeled by this enum); every other `return_format`
+    /// goes through `_check_response`, which attempts a JSON parse and falls
+    /// back to the raw response text on failure (pymisp/api.py `search()` /
+    /// `_check_response`). `stix2` is JSON in practice, so it is included
+    /// here too; the rest (csv, text, xml, stix, suricata, snort, yara, rpz,
+    /// openioc) are plain text and must not be forced through `serde_json`.
+    pub(crate) fn is_json(&self) -> bool {
+        matches!(self, Self::Json | Self::Stix2)
+    }
 }
 
 /// Parameters for MISP REST search queries.
