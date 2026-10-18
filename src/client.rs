@@ -3115,12 +3115,19 @@ impl MispClient {
 }
 
 /// Ensure the URL has a trailing slash so `Url::join` works correctly.
+///
+/// The URL is parsed first, and only the path component is given a trailing
+/// slash. Appending `/` to the raw string before parsing would corrupt any
+/// query string or fragment (the slash lands inside the query instead of the
+/// path), and would leave a configured subpath (e.g. `/misp`) without a
+/// trailing slash, causing `Url::join` to silently drop it.
 fn normalize_url(url: &str) -> MispResult<Url> {
-    let mut s = url.to_string();
-    if !s.ends_with('/') {
-        s.push('/');
+    let mut parsed = Url::parse(url)?;
+    if !parsed.path().ends_with('/') {
+        let path_with_slash = format!("{}/", parsed.path());
+        parsed.set_path(&path_with_slash);
     }
-    Url::parse(&s).map_err(Into::into)
+    Ok(parsed)
 }
 
 /// Register a new user on a MISP instance (unauthenticated).
@@ -3246,6 +3253,40 @@ mod tests {
     fn normalize_url_preserves_path() {
         let u = normalize_url("https://misp.example.com/misp").unwrap();
         assert_eq!(u.as_str(), "https://misp.example.com/misp/");
+    }
+
+    #[test]
+    fn normalize_url_subpath_survives_join() {
+        // A base URL with a configured subpath must keep that subpath when
+        // later joined with an API path. This invariant already held before
+        // the fix for a plain subpath with no query string; it is kept here
+        // to guard the join behaviour the fix relies on.
+        let u = normalize_url("https://misp.example.com/misp").unwrap();
+        let joined = u.join("events/restSearch").unwrap();
+        assert_eq!(
+            joined.as_str(),
+            "https://misp.example.com/misp/events/restSearch"
+        );
+    }
+
+    #[test]
+    fn normalize_url_preserves_query_string() {
+        // Regression test: appending '/' to the raw string before parsing
+        // (the old implementation) puts the slash inside the query
+        // component, leaving the parsed path as "/misp" (no trailing
+        // slash) and causing `Url::join` to silently drop the "misp"
+        // subpath. Parsing first and setting the path afterwards keeps the
+        // query intact and the path correctly terminated.
+        let u = normalize_url("https://misp.example.com/misp?foo=bar").unwrap();
+        assert_eq!(u.path(), "/misp/");
+        assert_eq!(u.query(), Some("foo=bar"));
+        assert_eq!(u.as_str(), "https://misp.example.com/misp/?foo=bar");
+
+        let joined = u.join("events/restSearch").unwrap();
+        assert_eq!(
+            joined.as_str(),
+            "https://misp.example.com/misp/events/restSearch"
+        );
     }
 
     #[test]
