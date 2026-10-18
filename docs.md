@@ -393,7 +393,7 @@ let reference = MispObjectReference::new(
     "550e8400-e29b-41d4-a716-446655440000", // referenced object UUID
     "related-to",                             // relationship type
 );
-let created = client.add_object_reference(source_object_id, &reference).await?;
+let created = client.add_object_reference(&reference).await?;
 
 // Delete a reference
 client.delete_object_reference(reference_id).await?;
@@ -401,7 +401,7 @@ client.delete_object_reference(reference_id).await?;
 
 | Method | Signature | Returns |
 |--------|-----------|---------|
-| `add_object_reference` | `(object_id: i64, reference: &MispObjectReference) -> MispResult<MispObjectReference>` | Created reference |
+| `add_object_reference` | `(reference: &MispObjectReference) -> MispResult<MispObjectReference>` | Created reference |
 | `delete_object_reference` | `(id: i64) -> MispResult<Value>` | Deletion confirmation |
 
 ---
@@ -842,7 +842,7 @@ client.delete_galaxy_cluster(cluster_id, true).await?;
 | `add_galaxy_cluster` | `(galaxy_id: i64, cluster: &MispGalaxyCluster) -> MispResult<MispGalaxyCluster>` | Created cluster |
 | `update_galaxy_cluster` | `(cluster: &MispGalaxyCluster) -> MispResult<MispGalaxyCluster>` | Updated cluster |
 | `publish_galaxy_cluster` | `(id: i64) -> MispResult<Value>` | Publish confirmation |
-| `fork_galaxy_cluster` | `(galaxy_id: i64, cluster: &MispGalaxyCluster) -> MispResult<MispGalaxyCluster>` | Forked cluster |
+| `fork_galaxy_cluster` | `(galaxy_id: i64, cluster: &MispGalaxyCluster) -> MispResult<Value>` | Forked cluster |
 | `delete_galaxy_cluster` | `(id: i64, hard: bool) -> MispResult<Value>` | Deletion confirmation |
 
 ---
@@ -857,7 +857,7 @@ let relation = MispGalaxyClusterRelation::new(
     "target-cluster-uuid",
     "similar-to",
 );
-let created = client.add_galaxy_cluster_relation(cluster_id, &relation).await?;
+let created = client.add_galaxy_cluster_relation(&relation).await?;
 
 // Update a relation
 let updated = client.update_galaxy_cluster_relation(&created).await?;
@@ -868,7 +868,7 @@ client.delete_galaxy_cluster_relation(relation_id).await?;
 
 | Method | Signature | Returns |
 |--------|-----------|---------|
-| `add_galaxy_cluster_relation` | `(cluster_id: i64, relation: &MispGalaxyClusterRelation) -> MispResult<MispGalaxyClusterRelation>` | Created relation |
+| `add_galaxy_cluster_relation` | `(relation: &MispGalaxyClusterRelation) -> MispResult<MispGalaxyClusterRelation>` | Created relation |
 | `update_galaxy_cluster_relation` | `(relation: &MispGalaxyClusterRelation) -> MispResult<MispGalaxyClusterRelation>` | Updated relation |
 | `delete_galaxy_cluster_relation` | `(id: i64) -> MispResult<Value>` | Deletion confirmation |
 
@@ -1568,7 +1568,7 @@ let ts = parse_relative_timestamp("30m")?; // 30 minutes ago
 | `search` | `(controller: SearchController, params: &SearchParameters) -> MispResult<Value>` | Search results |
 | `search_index` | `(params: &SearchParameters) -> MispResult<Vec<MispEvent>>` | Event metadata |
 | `search_sightings` | `(context, id, source, type_, from, to, pub_ts, last, org) -> MispResult<Value>` | Sighting results |
-| `search_logs` | `(limit, page, log_id, title, created, model, action, ...) -> MispResult<Value>` | Log entries |
+| `search_logs` | `(limit, page, log_id, title, created, model, action, user_id, change, email, org, description, ip) -> MispResult<Value>` | Log entries |
 | `search_feeds` | `(value: &str) -> MispResult<Value>` | Feed matches |
 | `freetext` | `(event_id, string, warninglists, distribution, sg_id) -> MispResult<Value>` | Created attributes |
 
@@ -1586,18 +1586,23 @@ let blocklists = client.event_blocklists().await?;
 
 // Add an event to the blocklist
 let entry = client.add_event_blocklist(
-    "550e8400-e29b-41d4-a716-446655440000",
+    &["550e8400-e29b-41d4-a716-446655440000"],
     Some("Spam event"),
     Some("Blocked by RustMISP"),
     Some("ACME Corp"),
 ).await?;
 
 // Update a blocklist entry
-client.update_event_blocklist(
-    entry_id,
-    Some("Updated comment"),
-    None,
-).await?;
+let updated = MispEventBlocklist {
+    id: Some(entry_id),
+    event_uuid: None,
+    created: None,
+    comment: Some("Updated comment".to_string()),
+    event_info: None,
+    event_orgc: None,
+    orgc_uuid: None,
+};
+client.update_event_blocklist(&updated).await?;
 
 // Delete a blocklist entry
 client.delete_event_blocklist(entry_id).await?;
@@ -1613,18 +1618,20 @@ let blocklists = client.organisation_blocklists().await?;
 
 // Add an organisation to the blocklist
 let entry = client.add_organisation_blocklist(
-    "org-uuid-here",
+    &["org-uuid-here"],
     Some("Known spammer"),
-    Some("Blocked by admin"),
     Some("Spam Org"),
 ).await?;
 
 // Update a blocklist entry
-client.update_organisation_blocklist(
-    entry_id,
-    Some("Updated comment"),
-    None,
-).await?;
+let updated = MispOrganisationBlocklist {
+    id: Some(entry_id),
+    org_uuid: None,
+    created: None,
+    comment: Some("Updated comment".to_string()),
+    org_name: None,
+};
+client.update_organisation_blocklist(&updated).await?;
 
 // Delete a blocklist entry
 client.delete_organisation_blocklist(entry_id).await?;
@@ -1634,10 +1641,10 @@ client.delete_organisation_blocklist(entry_id).await?;
 |--------|-----------|---------|
 | `event_blocklists` | `() -> MispResult<Vec<MispEventBlocklist>>` | All event blocklists |
 | `organisation_blocklists` | `() -> MispResult<Vec<MispOrganisationBlocklist>>` | All org blocklists |
-| `add_event_blocklist` | `(uuid, comment, event_info, event_orgc) -> MispResult<MispEventBlocklist>` | Created entry |
-| `add_organisation_blocklist` | `(uuid, comment, org_name, org_uuid) -> MispResult<MispOrganisationBlocklist>` | Created entry |
-| `update_event_blocklist` | `(id, comment, event_info) -> MispResult<Value>` | Update confirmation |
-| `update_organisation_blocklist` | `(id, comment, org_name) -> MispResult<Value>` | Update confirmation |
+| `add_event_blocklist` | `(uuids: &[&str], comment, event_info, event_orgc) -> MispResult<Value>` | Created entry |
+| `add_organisation_blocklist` | `(uuids: &[&str], comment, org_name) -> MispResult<Value>` | Created entry |
+| `update_event_blocklist` | `(blocklist: &MispEventBlocklist) -> MispResult<Value>` | Update confirmation |
+| `update_organisation_blocklist` | `(blocklist: &MispOrganisationBlocklist) -> MispResult<Value>` | Update confirmation |
 | `delete_event_blocklist` | `(id: i64) -> MispResult<Value>` | Deletion confirmation |
 | `delete_organisation_blocklist` | `(id: i64) -> MispResult<Value>` | Deletion confirmation |
 
@@ -1655,14 +1662,11 @@ let community = client.get_community(1).await?;
 // Request access to a community
 client.request_community_access(
     1,                              // community_id
-    None,                           // requesting_user_email
-    None,                           // anonymise
-    None,                           // org_name
-    None,                           // org_uuid
-    None,                           // org_description
+    None,                           // requestor_org
+    None,                           // requestor_email
     Some("Requesting access"),      // message
     Some(true),                     // sync
-    None,                           // org_type
+    None,                           // anonymise
     None,                           // mock (test mode)
 ).await?;
 ```
@@ -1671,7 +1675,7 @@ client.request_community_access(
 |--------|-----------|---------|
 | `communities` | `() -> MispResult<Vec<MispCommunity>>` | All communities |
 | `get_community` | `(id: i64) -> MispResult<MispCommunity>` | Single community |
-| `request_community_access` | `(id, email, anonymise, org_name, org_uuid, org_desc, message, sync, org_type, mock) -> MispResult<Value>` | Request confirmation |
+| `request_community_access` | `(id, requestor_org, requestor_email, message, sync, anonymise, mock) -> MispResult<Value>` | Request confirmation |
 
 ---
 
