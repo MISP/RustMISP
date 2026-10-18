@@ -2006,8 +2006,8 @@ impl MispClient {
             body.insert("perm_admin".into(), serde_json::json!(v));
         }
         self.post(
-            &format!("users/registrations/accept/{id}"),
-            &Value::Object(body),
+            &format!("users/acceptRegistrations/{id}"),
+            &serde_json::json!({"User": Value::Object(body)}),
         )
         .await
     }
@@ -2015,7 +2015,7 @@ impl MispClient {
     /// Discard (decline) a user registration request.
     pub async fn discard_user_registration(&self, id: i64) -> MispResult<Value> {
         self.post(
-            &format!("users/registrations/decline/{id}"),
+            &format!("users/discardRegistrations/{id}"),
             &serde_json::json!({}),
         )
         .await
@@ -5828,7 +5828,7 @@ mod tests {
         let client = MispClient::new(server.uri(), "key", false).unwrap();
 
         Mock::given(method("POST"))
-            .and(path("/users/registrations/decline/3"))
+            .and(path("/users/discardRegistrations/3"))
             .respond_with(
                 ResponseTemplate::new(200)
                     .set_body_json(serde_json::json!({"message": "Registration discarded."})),
@@ -5838,6 +5838,39 @@ mod tests {
 
         let result = client.discard_user_registration(3).await.unwrap();
         assert_eq!(result["message"], "Registration discarded.");
+    }
+
+    #[tokio::test]
+    async fn accept_user_registration_posts() {
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/users/acceptRegistrations/3"))
+            .and(body_partial_json(serde_json::json!({
+                "User": {
+                    "org_id": 1,
+                    "role_id": 3,
+                    "perm_sync": false,
+                    "perm_publish": true,
+                    "perm_admin": false
+                }
+            })))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"message": "Added 1 user(s)."})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client
+            .accept_user_registration(3, Some(1), Some(3), Some(false), Some(true), Some(false))
+            .await
+            .unwrap();
+        assert_eq!(result["message"], "Added 1 user(s).");
     }
 
     // ── Role tests ──────────────────────────────────────────────────
