@@ -21,7 +21,7 @@ pub struct MispEventDelegation {
     )]
     pub event_id: Option<i64>,
 
-    /// The requesting organisation ID.
+    /// The target organisation ID to delegate to.
     #[serde(
         default,
         with = "string_or_i64_opt",
@@ -29,7 +29,7 @@ pub struct MispEventDelegation {
     )]
     pub org_id: Option<i64>,
 
-    /// The target organisation ID to delegate to.
+    /// The requesting organisation ID.
     #[serde(
         default,
         with = "string_or_i64_opt",
