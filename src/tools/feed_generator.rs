@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use md5::{Digest, Md5};
 use serde::Serialize;
 
 use crate::error::MispResult;
@@ -123,7 +124,7 @@ impl FeedGenerator {
             // Parse the event JSON back to extract attribute values
             if let Ok(event) = serde_json::from_str::<MispEvent>(&entry.event_json) {
                 for attr in &event.attributes {
-                    let hash = format!("{:x}", md5_value(attr.value.as_bytes()));
+                    let hash = format!("{:x}", Md5::digest(attr.value.as_bytes()));
                     hashes.entry(hash).or_default().push(entry.uuid.clone());
                 }
             }
@@ -150,19 +151,6 @@ impl Default for FeedGenerator {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Simple MD5-like hash using the standard library's built-in hasher.
-/// We use a basic FNV-style hash here since md-5 crate is optional.
-fn md5_value(data: &[u8]) -> u128 {
-    // Use a simple, deterministic hash for feed lookups.
-    // This is NOT cryptographic — it's for feed cache indexing only.
-    let mut hash: u128 = 0xcbf29ce484222325;
-    for &byte in data {
-        hash ^= byte as u128;
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
-    hash
 }
 
 #[cfg(test)]
@@ -217,8 +205,11 @@ mod tests {
 
         let hashes = feed_gen.generate_hashes();
         assert!(!hashes.is_empty());
-        // At least one hash should map to our event UUID
-        assert!(hashes.values().any(|v| v.contains(&"uuid-1".to_string())));
+        // MISP's hashes.csv keys are md5(value): verify against the real MD5
+        // of "1.2.3.4", not an implementation-defined hash.
+        let expected_md5 = "6465ec74397c9126916786bbcd6d7601";
+        assert!(hashes.contains_key(expected_md5));
+        assert!(hashes[expected_md5].contains(&"uuid-1".to_string()));
     }
 
     #[test]
