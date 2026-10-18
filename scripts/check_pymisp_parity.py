@@ -3,14 +3,17 @@
 RustMISP / PyMISP parity checker.
 
 Compares the public API surface and integration tests of RustMISP against
-the latest PyMISP from GitHub to identify missing methods and test gaps.
+a pinned revision of PyMISP from GitHub to identify missing methods and
+test gaps.
 
 Usage:
     python3 scripts/check_pymisp_parity.py                  # report only
     python3 scripts/check_pymisp_parity.py --update-readme   # update README badges
+    python3 scripts/check_pymisp_parity.py --pymisp-ref <sha-or-tag>
 
-The script fetches PyMISP directly from GitHub (no local clone needed).
-For offline use, pass --pymisp-path /path/to/PyMISP.
+The script fetches PyMISP directly from GitHub at a pinned ref (no local
+clone needed) and prints the resolved commit SHA it actually compared
+against. For offline use, pass --pymisp-path /path/to/PyMISP.
 """
 
 import argparse
@@ -27,22 +30,42 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 PYMISP_REPO = "https://github.com/MISP/PyMISP.git"
-PYMISP_BRANCH = "main"
+
+# Pinned by default so the parity badge only moves on a deliberate bump of
+# this constant, not on unrelated PyMISP churn on `main`. Override with
+# --pymisp-ref for an ad-hoc comparison against a different revision.
+PYMISP_REF = "e7debb4f0427dbc33800dc565d771ef1535f3c2f"
 
 
-def fetch_pymisp(target_dir: Path) -> Path:
-    """Shallow-clone the PyMISP repo into target_dir."""
-    print(f"Fetching PyMISP from {PYMISP_REPO} ({PYMISP_BRANCH})...")
+def fetch_pymisp(target_dir: Path, ref: str = PYMISP_REF) -> tuple[Path, str]:
+    """Shallow-fetch the PyMISP repo at `ref` into target_dir.
+
+    `ref` may be a branch, tag, or full commit SHA. Returns the checkout
+    path and the resolved commit SHA that was actually compared against,
+    so callers can record it (e.g. in CI job output) instead of leaving
+    the comparison basis implicit.
+    """
+    repo_dir = target_dir / "PyMISP"
+    print(f"Fetching PyMISP from {PYMISP_REPO} @ {ref}...")
+    subprocess.run(["git", "init", "-q", str(repo_dir)], check=True, capture_output=True, text=True)
     subprocess.run(
-        [
-            "git", "clone", "--depth", "1", "--branch", PYMISP_BRANCH,
-            "--single-branch", PYMISP_REPO, str(target_dir / "PyMISP"),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
+        ["git", "-C", str(repo_dir), "remote", "add", "origin", PYMISP_REPO],
+        check=True, capture_output=True, text=True,
     )
-    return target_dir / "PyMISP"
+    subprocess.run(
+        ["git", "-C", str(repo_dir), "fetch", "--depth", "1", "origin", ref],
+        check=True, capture_output=True, text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_dir), "checkout", "-q", "--detach", "FETCH_HEAD"],
+        check=True, capture_output=True, text=True,
+    )
+    resolved = subprocess.run(
+        ["git", "-C", str(repo_dir), "rev-parse", "FETCH_HEAD"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    print(f"Resolved PyMISP commit: {resolved}")
+    return repo_dir, resolved
 
 
 # ---------------------------------------------------------------------------
@@ -516,6 +539,11 @@ def main():
         action="store_true",
         help="Update README.md badge percentages",
     )
+    parser.add_argument(
+        "--pymisp-ref",
+        default=PYMISP_REF,
+        help=f"PyMISP branch, tag, or commit SHA to compare against (default: {PYMISP_REF})",
+    )
     args = parser.parse_args()
 
     if args.pymisp_path:
@@ -530,7 +558,7 @@ def main():
             run_comparison(local, update_readme=args.update_readme)
         else:
             with tempfile.TemporaryDirectory() as tmpdir:
-                pymisp_path = fetch_pymisp(Path(tmpdir))
+                pymisp_path, _resolved_commit = fetch_pymisp(Path(tmpdir), ref=args.pymisp_ref)
                 run_comparison(pymisp_path, update_readme=args.update_readme)
 
 
