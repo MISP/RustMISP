@@ -2,10 +2,10 @@
 
 use std::collections::HashMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::MispResult;
-use crate::models::event::MispEvent;
+use crate::models::event::{MispEvent, MispEventOrg};
 
 /// Generates MISP feed metadata (manifest and hashes) from a set of events.
 ///
@@ -27,14 +27,14 @@ pub struct FeedGenerator {
     events: Vec<FeedEntry>,
 }
 
+/// A single entry in a MISP feed `manifest.json`. A real MISP manifest maps
+/// each event UUID directly to a flat object (see `Feed::checkEventAgainstRules`
+/// and `Feed::getNewEventUuids` in MISP core, which read fields such as
+/// `$event['Orgc']['uuid']` and `$manifest[$eventUuid]['timestamp']` straight
+/// off the per-UUID entry) — there is no nested `Event` wrapper here, unlike
+/// the per-event `<uuid>.json` file.
 #[derive(Debug, Clone, Serialize)]
 struct ManifestEntry {
-    #[serde(rename = "Event")]
-    event: ManifestEventInfo,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct ManifestEventInfo {
     info: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     uuid: Option<String>,
@@ -46,6 +46,17 @@ struct ManifestEventInfo {
     threat_level_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     timestamp: Option<String>,
+    #[serde(rename = "Orgc", skip_serializing_if = "Option::is_none")]
+    orgc: Option<MispEventOrg>,
+}
+
+/// Wrapper used to serialize/deserialize the per-event feed file, which MISP
+/// expects (and produces) as `{"Event": {...}}`, matching the shape of the
+/// regular event JSON returned by the MISP REST API.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct EventFileWrapper {
+    #[serde(rename = "Event")]
+    event: MispEvent,
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +67,7 @@ struct FeedEntry {
     analysis: Option<i64>,
     threat_level_id: Option<i64>,
     timestamp: Option<i64>,
+    orgc: Option<MispEventOrg>,
     event_json: String,
 }
 
@@ -72,7 +84,12 @@ impl FeedGenerator {
             .clone()
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-        let event_json = serde_json::to_string(event).unwrap_or_default();
+        // The per-event feed file is a full event export and must be wrapped
+        // in an "Event" key, just like the MISP REST API's event JSON.
+        let event_json = serde_json::to_string(&EventFileWrapper {
+            event: event.clone(),
+        })
+        .unwrap_or_default();
 
         self.events.push(FeedEntry {
             uuid,
@@ -81,6 +98,7 @@ impl FeedGenerator {
             analysis: event.analysis,
             threat_level_id: event.threat_level_id,
             timestamp: event.timestamp,
+            orgc: event.orgc.clone(),
             event_json,
         });
     }
@@ -96,14 +114,13 @@ impl FeedGenerator {
             manifest.insert(
                 &entry.uuid,
                 ManifestEntry {
-                    event: ManifestEventInfo {
-                        info: entry.info.clone(),
-                        uuid: Some(entry.uuid.clone()),
-                        date: entry.date.clone(),
-                        analysis: entry.analysis.map(|a| a.to_string()),
-                        threat_level_id: entry.threat_level_id.map(|t| t.to_string()),
-                        timestamp: entry.timestamp.map(|t| t.to_string()),
-                    },
+                    info: entry.info.clone(),
+                    uuid: Some(entry.uuid.clone()),
+                    date: entry.date.clone(),
+                    analysis: entry.analysis.map(|a| a.to_string()),
+                    threat_level_id: entry.threat_level_id.map(|t| t.to_string()),
+                    timestamp: entry.timestamp.map(|t| t.to_string()),
+                    orgc: entry.orgc.clone(),
                 },
             );
         }
@@ -120,9 +137,11 @@ impl FeedGenerator {
         let mut hashes: HashMap<String, Vec<String>> = HashMap::new();
 
         for entry in &self.events {
-            // Parse the event JSON back to extract attribute values
-            if let Ok(event) = serde_json::from_str::<MispEvent>(&entry.event_json) {
-                for attr in &event.attributes {
+            // Parse the event JSON back to extract attribute values. The
+            // stored JSON is wrapped as {"Event": {...}}, matching the feed
+            // file format.
+            if let Ok(wrapper) = serde_json::from_str::<EventFileWrapper>(&entry.event_json) {
+                for attr in &wrapper.event.attributes {
                     let hash = format!("{:x}", md5_value(attr.value.as_bytes()));
                     hashes.entry(hash).or_default().push(entry.uuid.clone());
                 }
@@ -177,12 +196,32 @@ mod tests {
         event.uuid = Some("test-uuid-1234".to_string());
         event.info = "Test event".to_string();
         event.date = Some("2024-01-01".to_string());
+        event.orgc = Some(crate::models::event::MispEventOrg {
+            id: Some(1),
+            name: "ORGNAME".to_string(),
+            uuid: Some("orgc-uuid-1".to_string()),
+        });
         feed_gen.add_event(&event);
 
         let manifest = feed_gen.generate_manifest().unwrap();
         assert!(manifest.contains("test-uuid-1234"));
         assert!(manifest.contains("Test event"));
         assert!(manifest.contains("2024-01-01"));
+
+        // A real MISP manifest.json maps each UUID directly to a flat
+        // object (MISP core reads `$manifest[$eventUuid]['timestamp']` and
+        // `$event['Orgc']['uuid']` off the entry itself — see
+        // Feed::getNewEventUuids / Feed::checkEventAgainstRules), not to an
+        // object nested under an "Event" key.
+        let parsed: serde_json::Value = serde_json::from_str(&manifest).unwrap();
+        let entry = &parsed["test-uuid-1234"];
+        assert!(
+            entry.get("Event").is_none(),
+            "manifest entry must be flat, not wrapped in Event"
+        );
+        assert_eq!(entry["info"], "Test event");
+        assert_eq!(entry["Orgc"]["uuid"], "orgc-uuid-1");
+        assert_eq!(entry["Orgc"]["name"], "ORGNAME");
     }
 
     #[test]
@@ -229,7 +268,19 @@ mod tests {
         event.info = "Test".to_string();
         feed_gen.add_event(&event);
 
-        assert!(feed_gen.get_event_json("uuid-1").is_some());
+        let json = feed_gen
+            .get_event_json("uuid-1")
+            .expect("event json present");
+        // The per-event feed file must be wrapped in an "Event" key, exactly
+        // like the event JSON MISP itself serves over its REST API.
+        let parsed: serde_json::Value = serde_json::from_str(json).unwrap();
+        assert!(
+            parsed.get("Event").is_some(),
+            "per-event file must be wrapped in Event"
+        );
+        assert_eq!(parsed["Event"]["info"], "Test");
+        assert_eq!(parsed["Event"]["uuid"], "uuid-1");
+
         assert!(feed_gen.get_event_json("nonexistent").is_none());
     }
 
