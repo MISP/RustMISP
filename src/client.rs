@@ -402,10 +402,7 @@ impl MispClient {
 
     /// Enrich an event using expansion modules.
     pub async fn enrich_event(&self, id: i64, modules: Option<&[&str]>) -> MispResult<Value> {
-        let body = match modules {
-            Some(m) => serde_json::json!({ "modules": m }),
-            None => serde_json::json!({}),
-        };
+        let body = Self::enrichment_body(modules);
         self.post(&format!("events/enrichEvent/{id}"), &body).await
     }
 
@@ -501,12 +498,21 @@ impl MispClient {
 
     /// Enrich an attribute using expansion modules.
     pub async fn enrich_attribute(&self, id: i64, modules: Option<&[&str]>) -> MispResult<Value> {
-        let body = match modules {
-            Some(m) => serde_json::json!({ "modules": m }),
-            None => serde_json::json!({}),
-        };
-        self.post(&format!("attributes/enrichAttribute/{id}"), &body)
-            .await
+        let body = Self::enrichment_body(modules);
+        self.post(&format!("attributes/enrich/{id}"), &body).await
+    }
+
+    /// Build the request body MISP's enrichment endpoints expect.
+    ///
+    /// Both `AttributesController::enrich()` and `EventsController::enrichEvent()`
+    /// iterate the posted data as `$module => $enabled` pairs, so the body is a map
+    /// of module name to `true` -- not a `{"modules": [...]}` list.
+    fn enrichment_body(modules: Option<&[&str]>) -> Value {
+        let mut map = serde_json::Map::new();
+        for module in modules.unwrap_or(&[]) {
+            map.insert((*module).to_string(), Value::Bool(true));
+        }
+        Value::Object(map)
     }
 
     // ── Tags ──────────────────────────────────────────────────────────
@@ -6389,5 +6395,66 @@ mod tests {
 
         let r = client.delete_user_setting("dashboard", None).await.unwrap();
         assert_eq!(r["message"], "Setting deleted.");
+    }
+
+    #[tokio::test]
+    async fn enrich_attribute_uses_misp_path_and_module_map_body() {
+        use wiremock::matchers::{body_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        // MISP's action is AttributesController::enrich($id), and it reads the posted
+        // data as `$module => $enabled` pairs. PyMISP posts to /attributes/enrich/{id}
+        // with `{module_name: True}`.
+        Mock::given(method("POST"))
+            .and(path("/attributes/enrich/42"))
+            .and(body_json(
+                serde_json::json!({"dns": true, "virustotal": true}),
+            ))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"result": "ok"})),
+            )
+            .mount(&server)
+            .await;
+
+        let r = client
+            .enrich_attribute(42, Some(&["dns", "virustotal"]))
+            .await
+            .unwrap();
+        assert_eq!(r["result"], "ok");
+    }
+
+    #[tokio::test]
+    async fn enrich_event_sends_module_map_body() {
+        use wiremock::matchers::{body_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        // EventsController::enrichEvent() iterates `$module => $enabled` too, so a
+        // `{"modules": [...]}` body would request a module literally named "modules".
+        Mock::given(method("POST"))
+            .and(path("/events/enrichEvent/7"))
+            .and(body_json(serde_json::json!({"dns": true})))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"result": "ok"})),
+            )
+            .mount(&server)
+            .await;
+
+        let r = client.enrich_event(7, Some(&["dns"])).await.unwrap();
+        assert_eq!(r["result"], "ok");
+    }
+
+    #[test]
+    fn enrichment_body_is_a_module_map() {
+        assert_eq!(
+            MispClient::enrichment_body(Some(&["dns"])),
+            serde_json::json!({"dns": true})
+        );
+        assert_eq!(MispClient::enrichment_body(None), serde_json::json!({}));
     }
 }
