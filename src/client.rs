@@ -299,7 +299,7 @@ impl MispClient {
 
     /// Get the database schema diagnostic.
     pub async fn db_schema_diagnostic(&self) -> MispResult<Value> {
-        self.get("servers/schemaDiagnostics").await
+        self.get("servers/dbSchemaDiagnostic").await
     }
 
     // ── Events ────────────────────────────────────────────────────────
@@ -3441,6 +3441,29 @@ mod tests {
 
         let result = client.misp_instance_version().await.unwrap();
         assert_eq!(result["version"], "2.4.180");
+    }
+
+    #[tokio::test]
+    async fn db_schema_diagnostic_hits_correct_action() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        // ServersController::dbSchemaDiagnostic() is the real action name;
+        // there is no servers/schemaDiagnostics endpoint in MISP.
+        Mock::given(method("GET"))
+            .and(path("/servers/dbSchemaDiagnostic"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "diagnostic": [],
+                "expected_db_version": "123"
+            })))
+            .mount(&server)
+            .await;
+
+        let result = client.db_schema_diagnostic().await.unwrap();
+        assert_eq!(result["expected_db_version"], "123");
     }
 
     // ── Event CRUD tests ──────────────────────────────────────────────
