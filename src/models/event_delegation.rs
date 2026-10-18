@@ -62,11 +62,15 @@ pub struct MispEventDelegation {
     pub event_info: Option<String>,
 
     /// Organisation details.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, rename = "Org", skip_serializing_if = "Option::is_none")]
     pub org: Option<serde_json::Value>,
 
     /// Requester organisation details.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "RequesterOrg",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub requester_org: Option<serde_json::Value>,
 }
 
@@ -107,5 +111,31 @@ mod tests {
         assert_eq!(d.id, Some(7));
         assert_eq!(d.event_id, Some(42));
         assert_eq!(d.distribution, Some(1));
+    }
+
+    /// MISP's EventDelegation model (app/Model/EventDelegation.php) declares
+    /// `$belongsTo` with the aliases 'Org' and 'RequesterOrg', so the API
+    /// response nests the related organisations under the capitalized keys
+    /// "Org" / "RequesterOrg", not "org" / "requester_org".
+    #[test]
+    fn event_delegation_deserialize_org_fields() {
+        let json = r#"{
+            "id": "7",
+            "event_id": "42",
+            "org_id": "5",
+            "requester_org_id": "3",
+            "distribution": "1",
+            "Org": {"id": "5", "name": "Requesting Org"},
+            "RequesterOrg": {"id": "3", "name": "Target Org"}
+        }"#;
+        let d: MispEventDelegation = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            d.org,
+            Some(serde_json::json!({"id": "5", "name": "Requesting Org"}))
+        );
+        assert_eq!(
+            d.requester_org,
+            Some(serde_json::json!({"id": "3", "name": "Target Org"}))
+        );
     }
 }
