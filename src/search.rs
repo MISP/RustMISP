@@ -642,14 +642,23 @@ pub fn build_complex_query(
 ) -> Value {
     let mut map = serde_json::Map::new();
 
+    // MISP's restSearch treats an empty "OR"/"AND"/"NOT" list as a filter that
+    // matches nothing (rather than "no filter"), so an incidentally-empty
+    // vector must be omitted entirely instead of being sent as `[]`.
     if let Some(or_vals) = or_params {
-        map.insert("OR".to_string(), serde_json::json!(or_vals));
+        if !or_vals.is_empty() {
+            map.insert("OR".to_string(), serde_json::json!(or_vals));
+        }
     }
     if let Some(and_vals) = and_params {
-        map.insert("AND".to_string(), serde_json::json!(and_vals));
+        if !and_vals.is_empty() {
+            map.insert("AND".to_string(), serde_json::json!(and_vals));
+        }
     }
     if let Some(not_vals) = not_params {
-        map.insert("NOT".to_string(), serde_json::json!(not_vals));
+        if !not_vals.is_empty() {
+            map.insert("NOT".to_string(), serde_json::json!(not_vals));
+        }
     }
 
     Value::Object(map)
@@ -806,6 +815,19 @@ mod tests {
         let query = build_complex_query(None, None, None);
         let obj = query.as_object().unwrap();
         assert!(obj.is_empty());
+    }
+
+    #[test]
+    fn complex_query_empty_vec_is_omitted_not_sent_as_empty_array() {
+        // MISP treats {"OR": []} as "match nothing", not "no filter", so a
+        // Some(vec![]) must be omitted from the built query entirely rather
+        // than serialized as an empty array.
+        let query = build_complex_query(Some(vec![]), Some(vec![]), Some(vec![]));
+        let obj = query.as_object().unwrap();
+        assert!(
+            obj.is_empty(),
+            "expected empty vectors to be omitted, got {query:?}"
+        );
     }
 
     #[test]
