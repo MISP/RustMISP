@@ -689,7 +689,9 @@ pub fn parse_relative_timestamp(input: &str) -> MispResult<i64> {
         }
     };
 
-    Ok(num * multiplier)
+    num.checked_mul(multiplier).ok_or_else(|| {
+        MispError::InvalidSearch(format!("relative timestamp overflows i64: {input}"))
+    })
 }
 
 #[cfg(test)]
@@ -845,6 +847,15 @@ mod tests {
     fn parse_relative_timestamp_empty() {
         let result = parse_relative_timestamp("");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_relative_timestamp_overflow_returns_err() {
+        // i64::MAX days * 86400 overflows i64; this must return an
+        // InvalidSearch error rather than panic (debug) or wrap to a
+        // negative duration (release).
+        let result = parse_relative_timestamp("9223372036854775807d");
+        assert!(matches!(result, Err(MispError::InvalidSearch(_))));
     }
 
     #[test]
