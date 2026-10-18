@@ -3814,6 +3814,7 @@ mod tests {
         let obj = client.get_object(10).await.unwrap();
         assert_eq!(obj.id, Some(10));
         assert_eq!(obj.name, "file");
+        assert_eq!(obj.meta_category.as_deref(), Some("file"));
         assert_eq!(obj.template_version, Some(23));
     }
 
@@ -3845,12 +3846,13 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/objects/add/5"))
             .and(body_partial_json(serde_json::json!({
-                "Object": { "name": "file" }
+                "Object": { "name": "file", "meta-category": "file" }
             })))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "Object": {
                     "id": "20",
                     "name": "file",
+                    "meta-category": "file",
                     "event_id": "5",
                     "deleted": false
                 }
@@ -3858,10 +3860,12 @@ mod tests {
             .mount(&server)
             .await;
 
-        let obj = crate::MispObject::new("file");
+        let mut obj = crate::MispObject::new("file");
+        obj.meta_category = Some("file".into());
         let result = client.add_object(5, &obj).await.unwrap();
         assert_eq!(result.id, Some(20));
         assert_eq!(result.name, "file");
+        assert_eq!(result.meta_category.as_deref(), Some("file"));
         assert_eq!(result.event_id, Some(5));
     }
 
@@ -4021,6 +4025,7 @@ mod tests {
         assert_eq!(tmpl.id, Some(1));
         assert_eq!(tmpl.name, "file");
         assert_eq!(tmpl.version, Some(23));
+        assert_eq!(tmpl.meta_category.as_deref(), Some("file"));
     }
 
     // ── Attribute Proposal (Shadow Attribute) tests ─────────────────
