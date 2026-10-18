@@ -2601,7 +2601,20 @@ impl MispClient {
         &self,
         params: &crate::search::SearchParameters,
     ) -> MispResult<Vec<MispEvent>> {
-        let body = params.to_json();
+        let mut body = params.to_json();
+        // events/index expects `datefrom`/`dateuntil`, not the restSearch-style
+        // `from`/`to` keys. PyMISP explicitly renames these before posting
+        // (pymisp/api.py: search_index() pops 'date_from'/'date_to' into
+        // 'datefrom'/'dateuntil'); without this, MISP's events/index action
+        // silently ignores the date filters.
+        if let Some(map) = body.as_object_mut() {
+            if let Some(from) = map.remove("from") {
+                map.insert("datefrom".to_string(), from);
+            }
+            if let Some(to) = map.remove("to") {
+                map.insert("dateuntil".to_string(), to);
+            }
+        }
         let json = self.post("events/index", &body).await?;
         let arr = json
             .as_array()
@@ -3572,6 +3585,41 @@ mod tests {
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].info, "Event A");
         assert_eq!(events[1].info, "Event B");
+    }
+
+    #[tokio::test]
+    async fn search_index_renames_date_keys_for_events_index() {
+        use wiremock::matchers::{body_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        // events/index expects `datefrom`/`dateuntil`, not the restSearch-style
+        // `from`/`to` keys that SearchParameters::to_json() produces. PyMISP's
+        // search_index() explicitly renames these before posting.
+        let response = serde_json::json!([
+            {"id": "1", "info": "Event A", "published": true}
+        ]);
+
+        Mock::given(method("POST"))
+            .and(path("/events/index"))
+            .and(body_json(serde_json::json!({
+                "datefrom": "2024-01-01",
+                "dateuntil": "2024-12-31"
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&response))
+            .mount(&server)
+            .await;
+
+        let params = crate::search::SearchBuilder::new()
+            .date_from("2024-01-01")
+            .date_to("2024-12-31")
+            .build();
+
+        let events = client.search_index(&params).await.unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].info, "Event A");
     }
 
     #[tokio::test]
