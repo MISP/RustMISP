@@ -192,6 +192,29 @@ impl MispClient {
         self.check_response(response).await
     }
 
+    /// Send a POST request with a raw (non-JSON) body and parse the response.
+    ///
+    /// MISP actions such as `events/upload_stix` read the raw HTTP request
+    /// body directly, so the payload must not be wrapped in a JSON envelope.
+    async fn post_raw(
+        &self,
+        path: &str,
+        body: impl Into<reqwest::Body>,
+        content_type: &str,
+    ) -> MispResult<Value> {
+        let url = self.base_url.join(path)?;
+        log::debug!("{} {}", Method::POST, url);
+
+        let req = self
+            .client
+            .post(url)
+            .header(CONTENT_TYPE, content_type)
+            .body(body);
+
+        let response = req.send().await?;
+        self.check_response(response).await
+    }
+
     /// Send a HEAD request and return whether the resource exists (2xx).
     #[allow(dead_code)] // Used in later iterations for exists checks
     async fn head(&self, path: &str) -> MispResult<bool> {
@@ -2787,10 +2810,16 @@ impl MispClient {
     /// Upload a STIX file to create/update events.
     ///
     /// `version` should be `1` or `2` for STIX 1.x or STIX 2.x respectively.
+    /// MISP reads the raw HTTP request body for this action, so `data` is
+    /// posted verbatim (STIX 1.x is XML, STIX 2.x is JSON) rather than being
+    /// wrapped in a JSON envelope.
     pub async fn upload_stix(&self, data: &str, version: u8) -> MispResult<Value> {
-        let ver = if version >= 2 { "2" } else { "" };
-        let body = serde_json::json!({"data": data});
-        self.post(&format!("events/upload_stix{ver}"), &body).await
+        let (path, content_type) = if version >= 2 {
+            ("events/upload_stix/2", "application/json")
+        } else {
+            ("events/upload_stix/1", "application/xml")
+        };
+        self.post_raw(path, data.to_owned(), content_type).await
     }
 
     /// Make a raw API call to any MISP endpoint.
@@ -3417,6 +3446,58 @@ mod tests {
 
         let result = client.post("servers/serverSettingsEdit/test", &body).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn upload_stix_posts_raw_body_to_versioned_path() {
+        use wiremock::matchers::{body_string, header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        let stix_xml = "<stix:STIX_Package>raw stix 1.x content</stix:STIX_Package>";
+
+        // MISP's upload_stix($stix_version) action reads the raw request
+        // body (FileAccessTool::writeToTempFile($this->request->input())),
+        // so the payload must be posted verbatim, not wrapped in JSON, and
+        // the version must be part of the path.
+        Mock::given(method("POST"))
+            .and(path("/events/upload_stix/1"))
+            .and(header("Content-Type", "application/xml"))
+            .and(body_string(stix_xml))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"Event": {"id": "1"}})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client.upload_stix(stix_xml, 1).await;
+        assert!(result.is_ok(), "unexpected error: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    async fn upload_stix2_posts_raw_body_to_versioned_path() {
+        use wiremock::matchers::{body_string, header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        let stix_json = r#"{"type": "bundle", "objects": []}"#;
+
+        Mock::given(method("POST"))
+            .and(path("/events/upload_stix/2"))
+            .and(header("Content-Type", "application/json"))
+            .and(body_string(stix_json))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"Event": {"id": "2"}})),
+            )
+            .mount(&server)
+            .await;
+
+        let result = client.upload_stix(stix_json, 2).await;
+        assert!(result.is_ok(), "unexpected error: {:?}", result.err());
     }
 
     #[tokio::test]
