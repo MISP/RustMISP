@@ -2510,17 +2510,18 @@ impl MispClient {
         Ok(settings)
     }
 
-    /// Get a specific user setting by key. Optionally scope to a user ID.
+    /// Get a specific user setting by key. Optionally scope to a user ID
+    /// (defaults to the current authenticated user when omitted).
     pub async fn get_user_setting(
         &self,
         setting: &str,
         user_id: Option<i64>,
     ) -> MispResult<MispUserSetting> {
-        let path = match user_id {
-            Some(uid) => format!("userSettings/view/{setting}/{uid}"),
-            None => format!("userSettings/view/{setting}"),
-        };
-        let json = self.get(&path).await?;
+        let mut body = serde_json::json!({"setting": setting});
+        if let Some(uid) = user_id {
+            body["user_id"] = serde_json::json!(uid);
+        }
+        let json = self.post("userSettings/getSetting", &body).await?;
         let val = if json.get("UserSetting").is_some() {
             &json["UserSetting"]
         } else {
@@ -6340,6 +6341,60 @@ mod tests {
         let settings = client.user_settings().await.unwrap();
         assert_eq!(settings.len(), 2);
         assert_eq!(settings[0].setting, "dashboard");
+    }
+
+    #[tokio::test]
+    async fn get_user_setting_sends_post_with_body() {
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        // MISP's UserSettingsController::view($id) requires a numeric id,
+        // so a setting name can never be looked up via userSettings/view/*.
+        // The real lookup-by-name endpoint is
+        // UserSettingsController::getSetting($userId, $setting), reached
+        // over POST with {"setting": ..., "user_id": ...} in the body.
+        Mock::given(method("POST"))
+            .and(path("/userSettings/getSetting"))
+            .and(body_partial_json(
+                serde_json::json!({"setting": "dashboard", "user_id": 5}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": "1", "setting": "dashboard", "user_id": "5"
+            })))
+            .mount(&server)
+            .await;
+
+        let r = client.get_user_setting("dashboard", Some(5)).await.unwrap();
+        assert_eq!(r.setting, "dashboard");
+    }
+
+    #[tokio::test]
+    async fn get_user_setting_without_user_id_omits_it() {
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let client = MispClient::new(server.uri(), "key", false).unwrap();
+
+        // With no user_id given, the request should still be a POST to
+        // getSetting (the server defaults to the authenticated user);
+        // it must never fall back to the numeric-only view/{id} endpoint.
+        Mock::given(method("POST"))
+            .and(path("/userSettings/getSetting"))
+            .and(body_partial_json(
+                serde_json::json!({"setting": "dashboard"}),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": "1", "setting": "dashboard", "user_id": "1"
+            })))
+            .mount(&server)
+            .await;
+
+        let r = client.get_user_setting("dashboard", None).await.unwrap();
+        assert_eq!(r.setting, "dashboard");
     }
 
     #[tokio::test]
