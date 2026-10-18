@@ -192,6 +192,18 @@ pub struct MispGalaxyCluster {
     #[serde(default, with = "flexible_bool")]
     pub published: bool,
 
+    /// UUID of the cluster this one was forked/extended from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extends_uuid: Option<String>,
+
+    /// Version of the cluster this one was forked/extended from.
+    #[serde(
+        default,
+        with = "string_or_i64_opt",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub extends_version: Option<i64>,
+
     /// Galaxy cluster elements (key-value metadata).
     #[serde(
         default,
@@ -227,6 +239,8 @@ impl MispGalaxyCluster {
             orgc_id: None,
             default: false,
             published: false,
+            extends_uuid: None,
+            extends_version: None,
             galaxy_cluster_elements: Vec::new(),
             galaxy_cluster_relations: Vec::new(),
         }
@@ -439,6 +453,8 @@ mod tests {
             orgc_id: Some(1),
             default: true,
             published: true,
+            extends_uuid: Some("parent-uuid".into()),
+            extends_version: Some(2),
             galaxy_cluster_elements: vec![MispGalaxyClusterElement::new("country", "RU")],
             galaxy_cluster_relations: Vec::new(),
         };
